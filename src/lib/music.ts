@@ -1,9 +1,8 @@
 import { Capacitor } from '@capacitor/core'
-import { Browser } from '@capacitor/browser'
+import { AppLauncher } from '@capacitor/app-launcher'
 
 const DEFAULT_PLAYLIST_KEY = 'arena51.defaultMusicUrl'
 
-/** Official-feeling defaults that open in YouTube Music app/web */
 export const DEFAULT_YTM_PLAYLISTS = {
   engine: {
     label: 'Workout Energy',
@@ -38,10 +37,7 @@ export function setDefaultMusicUrl(url: string) {
 export function normalizeMusicUrl(input?: string | null): string {
   const raw = (input || '').trim()
   if (!raw) return getDefaultMusicUrl()
-
-  // Already a YTM / YT link
   if (/^https?:\/\//i.test(raw)) {
-    // Convert classic YouTube playlist → Music domain when possible
     try {
       const u = new URL(raw)
       if (u.hostname.includes('youtube.com') && !u.hostname.includes('music.')) {
@@ -49,48 +45,60 @@ export function normalizeMusicUrl(input?: string | null): string {
         if (list) return `https://music.youtube.com/playlist?list=${list}`
         const v = u.searchParams.get('v')
         if (v) return `https://music.youtube.com/watch?v=${v}`
-        if (u.pathname.startsWith('/playlist')) {
-          return `https://music.youtube.com${u.pathname}${u.search}`
-        }
       }
       return raw
     } catch {
       return raw
     }
   }
-
-  // Bare playlist id
   if (/^[A-Za-z0-9_-]{10,}$/.test(raw)) {
     return `https://music.youtube.com/playlist?list=${raw}`
   }
-
-  // Free text → search
   return `https://music.youtube.com/search?q=${encodeURIComponent(raw)}`
 }
 
 /**
- * YouTube Music cannot be embedded in an iframe.
- * Open the native app (or web) via system browser / Capacitor Browser.
+ * Ouvre YouTube Music sans Custom Tab qui recouvre Arena.
+ * 1) intent Android vers le package YTM
+ * 2) schéma vnd.youtube.music
+ * 3) fallback navigateur système externe
  */
 export async function openYouTubeMusic(url?: string | null): Promise<void> {
-  const target = normalizeMusicUrl(url)
+  const httpsUrl = normalizeMusicUrl(url)
 
-  if (Capacitor.isNativePlatform()) {
+  if (Capacitor.getPlatform() === 'android') {
+    // Intent explicite package YouTube Music
+    const intentUrl =
+      `intent://${httpsUrl.replace(/^https?:\/\//, '')}` +
+      '#Intent;scheme=https;package=com.google.android.apps.youtube.music;end'
+
     try {
-      await Browser.open({
-        url: target,
-        presentationStyle: 'popover',
-      })
+      const can = await AppLauncher.canOpenUrl({ url: intentUrl })
+      if (can.value) {
+        await AppLauncher.openUrl({ url: intentUrl })
+        return
+      }
+    } catch {
+      /* try next */
+    }
+
+    try {
+      const vnd = `vnd.youtube.music://${httpsUrl.replace(/^https?:\/\//, '')}`
+      await AppLauncher.openUrl({ url: vnd })
       return
     } catch {
-      // fall through
+      /* try next */
+    }
+
+    try {
+      await AppLauncher.openUrl({ url: httpsUrl })
+      return
+    } catch {
+      /* fall through */
     }
   }
 
-  // Web / fallback
-  const opened = window.open(target, '_blank', 'noopener,noreferrer')
-  if (!opened) {
-    // Popup blocked — navigate top
-    window.location.href = target
-  }
+  // Web / iOS / fallback : nouvel onglet système (pas de Custom Tab Capacitor Browser)
+  const opened = window.open(httpsUrl, '_blank', 'noopener,noreferrer')
+  if (!opened) window.location.href = httpsUrl
 }

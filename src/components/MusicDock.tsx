@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { Session } from '../types/session'
 import {
   DEFAULT_YTM_PLAYLISTS,
@@ -8,13 +8,8 @@ import {
   setDefaultMusicUrl,
 } from '../lib/music'
 
-export function MusicDock({
-  session,
-  autoOpen,
-}: {
-  session: Session
-  autoOpen?: boolean
-}) {
+/** Uniquement sur l'écran « Prêt ? » — jamais pendant la séance. */
+export function MusicDock({ session }: { session: Session }) {
   const sessionUrl = session.music?.playlistUrl || session.music?.playlistId
   const label = session.music?.label ?? 'YouTube Music'
   const [customUrl, setCustomUrl] = useState(() => getDefaultMusicUrl())
@@ -23,20 +18,14 @@ export function MusicDock({
 
   const resolved = normalizeMusicUrl(sessionUrl || customUrl)
 
-  useEffect(() => {
-    if (!autoOpen) return
-    void launch('auto')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoOpen, session.id])
-
-  async function launch(reason: 'tap' | 'auto' = 'tap') {
+  async function launch() {
     setBusy(true)
-    setStatus(reason === 'auto' ? 'Ouverture YouTube Music…' : null)
+    setStatus(null)
     try {
       const url = sessionUrl ? normalizeMusicUrl(sessionUrl) : normalizeMusicUrl(customUrl)
       if (!sessionUrl && customUrl.trim()) setDefaultMusicUrl(customUrl)
       await openYouTubeMusic(url)
-      setStatus('YouTube Music ouvert — reviens ici pour le timer.')
+      setStatus('YouTube Music lancé — reviens ici pour le chrono.')
     } catch {
       setStatus('Impossible d’ouvrir YouTube Music.')
     } finally {
@@ -52,22 +41,17 @@ export function MusicDock({
           App native
         </span>
       </div>
-
       <div className="music-dock-body">
         <p className="hint" style={{ marginTop: 0 }}>
-          YouTube Music ne s’embarque pas dans l’app (blocage Google). Arena l’ouvre à côté — le timer reste ici.
+          Ouvre YTM à côté (intent). Le timer reste au premier plan dès que tu reviens.
         </p>
-
-        <div className="music-url-row">
-          <input
-            className="music-input"
-            value={customUrl}
-            onChange={(e) => setCustomUrl(e.target.value)}
-            placeholder="Colle ton lien playlist YouTube Music…"
-            aria-label="URL YouTube Music"
-          />
-        </div>
-
+        <input
+          className="music-input"
+          value={customUrl}
+          onChange={(e) => setCustomUrl(e.target.value)}
+          placeholder="Lien playlist YouTube Music…"
+          aria-label="URL YouTube Music"
+        />
         <div className="music-presets">
           {Object.values(DEFAULT_YTM_PLAYLISTS).map((p) => (
             <button
@@ -83,18 +67,11 @@ export function MusicDock({
             </button>
           ))}
         </div>
-
-        <button
-          type="button"
-          className="btn btn-primary btn-block"
-          disabled={busy}
-          onClick={() => void launch('tap')}
-        >
+        <button type="button" className="btn btn-primary btn-block" disabled={busy} onClick={() => void launch()}>
           {busy ? 'Ouverture…' : '▶ Lancer YouTube Music'}
         </button>
-
         {status && <p className="hint">{status}</p>}
-        <p className="hint" style={{ wordBreak: 'break-all', opacity: 0.7 }}>
+        <p className="hint" style={{ wordBreak: 'break-all', opacity: 0.65 }}>
           {resolved}
         </p>
       </div>
