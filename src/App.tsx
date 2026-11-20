@@ -5,21 +5,27 @@ import { Inbox } from './components/Inbox'
 import { Player } from './components/Player'
 import {
   addSessionToInbox,
+  clearActivePlayer,
+  getActivePlayer,
   getGhost,
   getInbox,
-  saveGhost,
+  getLastGhost,
+  removeSessionFromInbox,
+  saveGhostsFromRun,
   saveLog,
 } from './lib/storage'
+import type { PersistedPlayerState } from './lib/sessionClock'
 import type { GhostSplit, Session, SessionLog } from './types/session'
 
 type Screen =
   | { name: 'inbox' }
   | { name: 'import' }
-  | { name: 'player'; session: Session }
+  | { name: 'player'; session: Session; resume?: PersistedPlayerState | null }
   | { name: 'afterglow'; session: Session; log: SessionLog; ghostDeltaMs: number | null }
 
 export default function App() {
   const [sessions, setSessions] = useState<Session[]>(() => getInbox())
+  const [activePlayer, setActivePlayer] = useState<PersistedPlayerState | null>(() => getActivePlayer())
   const [screen, setScreen] = useState<Screen>({ name: 'inbox' })
 
   const ghosts = useMemo(() => {
@@ -28,21 +34,45 @@ export default function App() {
     return map
   }, [sessions, screen])
 
+  const lastGhosts = useMemo(() => {
+    const map: Record<string, GhostSplit | null> = {}
+    for (const s of sessions) map[s.id] = getLastGhost(s.id)
+    return map
+  }, [sessions, screen])
+
+  function refreshInbox() {
+    setSessions(getInbox())
+    setActivePlayer(getActivePlayer())
+  }
+
   function openSession(session: Session) {
-    setScreen({ name: 'player', session })
+    setScreen({ name: 'player', session, resume: null })
+  }
+
+  function resumeActive() {
+    const snap = getActivePlayer()
+    if (!snap) return
+    const session = getInbox().find((s) => s.id === snap.sessionId)
+    if (!session) {
+      clearActivePlayer()
+      refreshInbox()
+      return
+    }
+    setScreen({ name: 'player', session, resume: snap })
   }
 
   function handleImported(session: Session) {
     addSessionToInbox(session)
-    setSessions(getInbox())
-    setScreen({ name: 'player', session })
+    refreshInbox()
+    setScreen({ name: 'player', session, resume: null })
   }
 
   function handleFinish(
     session: Session,
     payload: { totalMs: number; blockLogs: SessionLog['blockLogs']; blockDurationsMs: number[] },
   ) {
-    const prev = getGhost(session.id)
+    const prevBest = getGhost(session.id)
+    const complete = payload.blockLogs.every((b) => !b.dropped)
     const log: SessionLog = {
       sessionId: session.id,
       sessionTitle: session.title,
@@ -53,14 +83,20 @@ export default function App() {
       blockLogs: payload.blockLogs,
     }
     saveLog(log)
-    saveGhost({
-      sessionId: session.id,
-      sessionTitle: session.title,
-      blockDurationsMs: payload.blockDurationsMs,
-      totalMs: payload.totalMs,
-      finishedAt: log.finishedAt,
-    })
-    const ghostDeltaMs = prev ? payload.totalMs - prev.totalMs : null
+    saveGhostsFromRun(
+      {
+        sessionId: session.id,
+        sessionTitle: session.title,
+        blockDurationsMs: payload.blockDurationsMs,
+        totalMs: payload.totalMs,
+        finishedAt: log.finishedAt,
+      },
+      complete,
+    )
+    clearActivePlayer()
+    setActivePlayer(null)
+    const newBest = getGhost(session.id)
+    const ghostDeltaMs = prevBest && newBest ? newBest.totalMs - prevBest.totalMs : null
     setScreen({ name: 'afterglow', session, log, ghostDeltaMs })
   }
 
@@ -70,8 +106,15 @@ export default function App() {
         <Inbox
           sessions={sessions}
           ghosts={ghosts}
+          lastGhosts={lastGhosts}
+          activePlayer={activePlayer}
           onOpen={openSession}
+          onResume={resumeActive}
           onImport={() => setScreen({ name: 'import' })}
+          onDelete={(id) => {
+            removeSessionFromInbox(id)
+            refreshInbox()
+          }}
         />
       )}
       {screen.name === 'import' && (
@@ -81,7 +124,12 @@ export default function App() {
         <Player
           session={screen.session}
           ghost={getGhost(screen.session.id)}
-          onAbort={() => setScreen({ name: 'inbox' })}
+          lastGhost={getLastGhost(screen.session.id)}
+          resumeState={screen.resume ?? undefined}
+          onAbort={() => {
+            setActivePlayer(getActivePlayer())
+            setScreen({ name: 'inbox' })
+          }}
           onFinish={(payload) => handleFinish(screen.session, payload)}
         />
       )}
@@ -90,7 +138,10 @@ export default function App() {
           session={screen.session}
           log={screen.log}
           ghostDeltaMs={screen.ghostDeltaMs}
-          onHome={() => setScreen({ name: 'inbox' })}
+          onHome={() => {
+            refreshInbox()
+            setScreen({ name: 'inbox' })
+          }}
         />
       )}
     </div>
