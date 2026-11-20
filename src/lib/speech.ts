@@ -1,8 +1,20 @@
 import { Capacitor } from '@capacitor/core'
 import { SpeechRecognition } from '@capacitor-community/speech-recognition'
 import { TextToSpeech } from '@capacitor-community/text-to-speech'
+import { sanitizeForTts } from './ttsSanitize'
 
-export type VoiceCommand = 'next' | 'done' | 'drop'
+export type VoiceCommand = 'next' | 'done' | 'drop' | 'pause' | 'resume'
+
+let speakingUntil = 0
+
+export function markSpeaking(durationMs = 2500) {
+  speakingUntil = Date.now() + durationMs
+}
+
+export function isSpeakingGate(): boolean {
+  // Ignore l'écoute pendant TTS + 500 ms
+  return Date.now() < speakingUntil + 500
+}
 
 export function cueForBlock(opts: {
   name: string
@@ -13,11 +25,13 @@ export function cueForBlock(opts: {
   vestKg?: number
   isRest?: boolean
   restSec?: number
+  nextPreview?: string
 }): string {
   if (opts.isRest) {
-    return `Repos. ${opts.restSec ?? 30} secondes.`
+    const base = `Repos. ${opts.restSec ?? 30} secondes.`
+    return opts.nextPreview ? `${base} Ensuite : ${opts.nextPreview}.` : base
   }
-  const parts = [opts.name]
+  const parts = [sanitizeForTts(opts.name)]
   if (opts.side === 'L') parts.push('côté gauche')
   if (opts.side === 'R') parts.push('côté droit')
   if (opts.reps) parts.push(`${opts.reps} répétitions`)
@@ -27,42 +41,55 @@ export function cueForBlock(opts: {
   return parts.join('. ')
 }
 
+/** Commandes strictes uniquement. */
 export function matchVoiceCommand(transcript: string): VoiceCommand | null {
-  const t = transcript.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').trim()
+  const t = transcript
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .trim()
   if (!t) return null
-  if (/(trop dur|drop|allege|allège|panic|plus leger|plus léger)/.test(t)) return 'drop'
-  if (/(suivant|next|avancer|go|continue|passe|encore)/.test(t)) return 'next'
-  if (/(fait|done|ok|termine|terminé|valide|valider|yes|oui)/.test(t)) return 'done'
+  // Exactitude : le mot-clé doit être le cœur de l'énoncé (pas ok/oui/go…)
+  if (/^(trop dur)$/.test(t) || /\btrop dur\b/.test(t)) return 'drop'
+  if (/^(suivant)$/.test(t) || /\bsuivant\b/.test(t)) return 'next'
+  if (/^(fait)$/.test(t) || /\bfait\b/.test(t)) return 'done'
+  if (/^(pause)$/.test(t) || /\bpause\b/.test(t)) return 'pause'
+  if (/^(reprendre)$/.test(t) || /\breprendre\b/.test(t)) return 'resume'
   return null
 }
 
 export async function speak(text: string): Promise<void> {
-  if (!text.trim()) return
+  const clean = sanitizeForTts(text)
+  if (!clean.trim()) return
+  markSpeaking(Math.min(8000, 800 + clean.length * 60))
 
   if (Capacitor.isNativePlatform()) {
     try {
       await TextToSpeech.stop()
       await TextToSpeech.speak({
-        text,
+        text: clean,
         lang: 'fr-FR',
         rate: 1.05,
         pitch: 1.0,
         category: 'playback',
       })
+      markSpeaking(400)
       return
     } catch {
-      // fall through to web TTS
+      /* web fallback */
     }
   }
 
   if (typeof window === 'undefined' || !window.speechSynthesis) return
   window.speechSynthesis.cancel()
   await new Promise<void>((resolve) => {
-    const utter = new SpeechSynthesisUtterance(text)
+    const utter = new SpeechSynthesisUtterance(clean)
     utter.lang = 'fr-FR'
     utter.rate = 1.05
-    utter.pitch = 0.95
-    utter.onend = () => resolve()
+    utter.onend = () => {
+      markSpeaking(400)
+      resolve()
+    }
     utter.onerror = () => resolve()
     window.speechSynthesis.speak(utter)
   })
@@ -79,24 +106,16 @@ export async function stopSpeaking(): Promise<void> {
   } catch {
     /* ignore */
   }
+  markSpeaking(0)
 }
 
-export type VoiceListenHandle = {
-  stop: () => Promise<void>
-}
+export type VoiceListenHandle = { stop: () => Promise<void> }
 
-/**
- * Starts voice command listening.
- * Native Android/iOS: Capacitor SpeechRecognition (needs mic permission).
- * Web: Web Speech API when available.
- */
 export async function startVoiceListen(
   onCommand: (cmd: VoiceCommand) => void,
   onStatus?: (msg: string) => void,
 ): Promise<VoiceListenHandle> {
-  if (Capacitor.isNativePlatform()) {
-    return startNativeListen(onCommand, onStatus)
-  }
+  if (Capacitor.isNativePlatform()) return startNativeListen(onCommand, onStatus)
   return startWebListen(onCommand, onStatus)
 }
 
@@ -105,69 +124,98 @@ async function startNativeListen(
   onStatus?: (msg: string) => void,
 ): Promise<VoiceListenHandle> {
   let active = true
-  let restarting = false
+  let backoffMs = 400
+  let restartTimer: ReturnType<typeof setTimeout> | null = null
 
   const avail = await SpeechRecognition.available()
   if (!avail.available) {
-    onStatus?.('Reconnaissance vocale indisponible sur cet appareil.')
+    onStatus?.('Reconnaissance vocale indisponible.')
     return { stop: async () => undefined }
   }
-
   const perm = await SpeechRecognition.requestPermissions()
   if (perm.speechRecognition !== 'granted') {
     onStatus?.('Autorise le micro pour Voice next.')
     return { stop: async () => undefined }
   }
 
-  const handlePartial = await SpeechRecognition.addListener('partialResults', (data) => {
-    const text = (data.matches || []).join(' ')
-    if (!text) return
-    onStatus?.(`« ${text} »`)
-    const cmd = matchVoiceCommand(text)
-    if (cmd) onCommand(cmd)
+  const scheduleRestart = () => {
+    if (!active || restartTimer) return
+    const wait = backoffMs
+    // Backoff pour éviter la boucle serrée du SpeechRecognizer Android
+    backoffMs = Math.min(4000, Math.round(backoffMs * 1.5))
+    restartTimer = setTimeout(async () => {
+      restartTimer = null
+      if (!active) return
+      if (isSpeakingGate()) {
+        scheduleRestart()
+        return
+      }
+      try {
+        await SpeechRecognition.start({
+          language: 'fr-FR',
+          partialResults: true,
+          popup: false,
+          maxResults: 3,
+        })
+        backoffMs = 400
+        onStatus?.('Écoute… « suivant » · « fait » · « trop dur »')
+      } catch {
+        scheduleRestart()
+      }
+    }, wait)
+  }
+
+  const handlePartial = await SpeechRecognition.addListener('partialResults', () => {
+    // Partiels ignorés volontairement — on attend le résultat final via stop/listeningState
   })
 
+  // Sur Android, avec partialResults, le final arrive souvent juste avant stopped.
+  // On capture aussi via un second start sans partial pour les matches.
   const handleState = await SpeechRecognition.addListener('listeningState', async (data) => {
     if (!active) return
-    if (data.status === 'stopped' && !restarting) {
-      restarting = true
-      setTimeout(async () => {
-        if (!active) {
-          restarting = false
-          return
-        }
-        try {
-          await SpeechRecognition.start({
-            language: 'fr-FR',
-            partialResults: true,
-            popup: false,
-            maxResults: 3,
-          })
-          onStatus?.('Écoute… dis « suivant »')
-        } catch {
-          onStatus?.('Écoute interrompue — rétente…')
-        } finally {
-          restarting = false
-        }
-      }, 350)
-    }
+    if (data.status === 'stopped') scheduleRestart()
   })
 
-  try {
-    await SpeechRecognition.start({
-      language: 'fr-FR',
-      partialResults: true,
-      popup: false,
-      maxResults: 3,
-    })
-    onStatus?.('Écoute… dis « suivant », « fait » ou « trop dur »')
-  } catch (e) {
-    onStatus?.(e instanceof Error ? e.message : 'Impossible de démarrer le micro.')
+  // Boucle de reconnaissance « oneshot » : start sans partial → matches finaux
+  const loopFinal = async () => {
+    while (active) {
+      if (isSpeakingGate()) {
+        await new Promise((r) => setTimeout(r, 300))
+        continue
+      }
+      try {
+        const res = await SpeechRecognition.start({
+          language: 'fr-FR',
+          partialResults: false,
+          popup: false,
+          maxResults: 3,
+          prompt: 'Arena 51',
+        })
+        backoffMs = 400
+        const text = (res.matches || []).join(' ')
+        if (text) {
+          onStatus?.(`« ${text} »`)
+          if (!isSpeakingGate()) {
+            const cmd = matchVoiceCommand(text)
+            if (cmd) onCommand(cmd)
+          }
+        }
+      } catch {
+        // Redémarre avec backoff
+        await new Promise((r) => setTimeout(r, backoffMs))
+        backoffMs = Math.min(4000, Math.round(backoffMs * 1.5))
+      }
+      await new Promise((r) => setTimeout(r, 250))
+    }
   }
+
+  onStatus?.('Écoute… « suivant » · « fait » · « trop dur »')
+  void loopFinal()
 
   return {
     stop: async () => {
       active = false
+      if (restartTimer) clearTimeout(restartTimer)
       try {
         await handlePartial.remove()
         await handleState.remove()
@@ -198,52 +246,59 @@ function startWebListen(
     (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognition }).webkitSpeechRecognition
 
   if (!SR) {
-    onStatus?.('Ce navigateur ne gère pas la voix — utilise l’APK Android.')
+    onStatus?.('Voix indisponible dans ce navigateur — utilise l’APK.')
     return Promise.resolve({ stop: async () => undefined })
   }
 
   let active = true
+  let backoffMs = 400
   const rec = new SR()
   rec.lang = 'fr-FR'
   rec.continuous = true
   rec.interimResults = true
 
   rec.onresult = (event: SpeechRecognitionEvent) => {
+    if (isSpeakingGate()) return
     const last = event.results[event.results.length - 1]
-    if (!last?.[0]) return
+    if (!last?.[0] || !last.isFinal) return // finals only
     const transcript = last[0].transcript
-    if (last.isFinal) onStatus?.(`« ${transcript} »`)
+    onStatus?.(`« ${transcript} »`)
     const cmd = matchVoiceCommand(transcript)
-    if (cmd && last.isFinal) onCommand(cmd)
+    if (cmd) onCommand(cmd)
   }
 
-  rec.onerror = (ev: Event) => {
-    const err = (ev as unknown as { error?: string }).error
-    if (err === 'not-allowed') onStatus?.('Micro bloqué par le navigateur.')
-    else if (active) {
+  const restart = () => {
+    if (!active) return
+    setTimeout(() => {
+      if (!active) return
+      try {
+        rec.start()
+        backoffMs = 400
+      } catch {
+        backoffMs = Math.min(4000, Math.round(backoffMs * 1.5))
+        restart()
+      }
+    }, backoffMs)
+  }
+
+  rec.onerror = () => {
+    if (active) {
+      backoffMs = Math.min(4000, Math.round(backoffMs * 1.5))
       try {
         rec.stop()
-        setTimeout(() => {
-          if (active) rec.start()
-        }, 500)
       } catch {
         /* ignore */
       }
+      restart()
     }
   }
-
   rec.onend = () => {
-    if (!active) return
-    try {
-      rec.start()
-    } catch {
-      /* ignore */
-    }
+    if (active) restart()
   }
 
   try {
     rec.start()
-    onStatus?.('Écoute… dis « suivant », « fait » ou « trop dur »')
+    onStatus?.('Écoute… « suivant » · « fait » · « trop dur »')
   } catch {
     onStatus?.('Impossible de démarrer le micro.')
   }
