@@ -77,3 +77,19 @@ L’embed utilise l’iframe YouTube (playlist). « Ouvrir » lance YouTube Musi
 
 Actuellement hébergé sur `Corben020975/GilleRun` (repo vide réutilisé).  
 Renomme-le en **arena-51** dans GitHub → Settings → General → Repository name.
+
+## APK Android
+
+Fichier prêt à installer (sideload / sources inconnues) :
+
+- [`releases/Arena51-debug.apk`](./releases/Arena51-debug.apk)
+
+Build local :
+
+```bash
+npm run build
+npx cap sync android
+cd android && ./gradlew assembleDebug
+```
+
+APK : `android/app/build/outputs/apk/debug/app-debug.apk`
