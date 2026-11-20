@@ -248,6 +248,44 @@ a {
   width: 100%;
 }
 
+.btn-xl {
+  min-height: 64px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  padding: 16px 14px;
+}
+
+.controls-xl {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 420px) {
+  .controls-xl {
+    grid-template-columns: 1fr 1.4fr 1fr;
+  }
+}
+
+.player-terrain .clock {
+  font-size: clamp(4rem, 18vw, 6rem);
+}
+
+.session-card-wrap {
+  position: relative;
+}
+
+.session-card-wrap .session-card {
+  padding-right: 48px;
+}
+
+.session-delete {
+  position: absolute;
+  top: 10px;
+  right: 8px;
+  min-width: 36px;
+  padding: 8px;
+  opacity: 0.7;
+}
+
 .panel {
   background: var(--bg-card);
   border: 1px solid var(--line);
