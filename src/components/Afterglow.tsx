@@ -52,10 +52,17 @@ export function Afterglow({
             <div className="val">{formatMs(log.totalMs)}</div>
             <div className="lbl">Temps</div>
           </div>
-          <div className="stat">
-            <div className="val">{log.blockLogs.length}</div>
-            <div className="lbl">Blocs</div>
-          </div>
+          {log.amrapRounds != null ? (
+            <div className="stat">
+              <div className="val">{log.amrapRounds}</div>
+              <div className="lbl">Tours AMRAP</div>
+            </div>
+          ) : (
+            <div className="stat">
+              <div className="val">{log.blockLogs.length}</div>
+              <div className="lbl">Blocs</div>
+            </div>
+          )}
           <div className="stat">
             <div className="val">
               {ghostDeltaMs == null

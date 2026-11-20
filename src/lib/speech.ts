@@ -124,8 +124,6 @@ async function startNativeListen(
   onStatus?: (msg: string) => void,
 ): Promise<VoiceListenHandle> {
   let active = true
-  let backoffMs = 400
-  let restartTimer: ReturnType<typeof setTimeout> | null = null
 
   const avail = await SpeechRecognition.available()
   if (!avail.available) {
@@ -138,49 +136,20 @@ async function startNativeListen(
     return { stop: async () => undefined }
   }
 
-  const scheduleRestart = () => {
-    if (!active || restartTimer) return
-    const wait = backoffMs
-    // Backoff pour éviter la boucle serrée du SpeechRecognizer Android
-    backoffMs = Math.min(4000, Math.round(backoffMs * 1.5))
-    restartTimer = setTimeout(async () => {
-      restartTimer = null
-      if (!active) return
-      if (isSpeakingGate()) {
-        scheduleRestart()
-        return
-      }
-      try {
-        await SpeechRecognition.start({
-          language: 'fr-FR',
-          partialResults: true,
-          popup: false,
-          maxResults: 3,
-        })
-        backoffMs = 400
-        onStatus?.('Écoute… « suivant » · « fait » · « trop dur »')
-      } catch {
-        scheduleRestart()
-      }
-    }, wait)
-  }
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-  const handlePartial = await SpeechRecognition.addListener('partialResults', () => {
-    // Partiels ignorés volontairement — on attend le résultat final via stop/listeningState
-  })
-
-  // Sur Android, avec partialResults, le final arrive souvent juste avant stopped.
-  // On capture aussi via un second start sans partial pour les matches.
-  const handleState = await SpeechRecognition.addListener('listeningState', async (data) => {
-    if (!active) return
-    if (data.status === 'stopped') scheduleRestart()
-  })
-
-  // Boucle de reconnaissance « oneshot » : start sans partial → matches finaux
-  const loopFinal = async () => {
+  /*
+   * UNE seule boucle d'écoute (avant : deux mécanismes concurrents qui se
+   * disputaient le micro → erreurs « recognizer busy » et commandes perdues).
+   * start() sans partialResults attend la fin de la phrase et renvoie les
+   * résultats finaux. Silence / erreur → on relance avec un backoff.
+   */
+  const loop = async () => {
+    let backoffMs = 300
     while (active) {
+      // Ne pas écouter pendant que le TTS parle (sinon il s'entend lui-même)
       if (isSpeakingGate()) {
-        await new Promise((r) => setTimeout(r, 300))
+        await wait(250)
         continue
       }
       try {
@@ -189,46 +158,37 @@ async function startNativeListen(
           partialResults: false,
           popup: false,
           maxResults: 3,
-          prompt: 'Arena 51',
         })
-        backoffMs = 400
-        const text = (res.matches || []).join(' ')
-        if (text) {
-          onStatus?.(`« ${text} »`)
-          if (!isSpeakingGate()) {
-            const cmd = matchVoiceCommand(text)
-            if (cmd) onCommand(cmd)
+        if (!active) break
+        backoffMs = 300
+        const matches = res.matches || []
+        if (matches.length && !isSpeakingGate()) {
+          onStatus?.(`« ${matches[0]} »`)
+          // On teste chaque hypothèse : la 1re n'est pas toujours la bonne
+          for (const m of matches) {
+            const cmd = matchVoiceCommand(m)
+            if (cmd) {
+              onCommand(cmd)
+              break
+            }
           }
         }
       } catch {
-        // Redémarre avec backoff
-        await new Promise((r) => setTimeout(r, backoffMs))
-        backoffMs = Math.min(4000, Math.round(backoffMs * 1.5))
+        // Silence (no match) ou micro occupé : backoff progressif, plafonné
+        await wait(backoffMs)
+        backoffMs = Math.min(3000, Math.round(backoffMs * 1.5))
       }
-      await new Promise((r) => setTimeout(r, 250))
     }
   }
 
   onStatus?.('Écoute… « suivant » · « fait » · « trop dur »')
-  void loopFinal()
+  void loop()
 
   return {
     stop: async () => {
       active = false
-      if (restartTimer) clearTimeout(restartTimer)
-      try {
-        await handlePartial.remove()
-        await handleState.remove()
-      } catch {
-        /* ignore */
-      }
       try {
         await SpeechRecognition.stop()
-      } catch {
-        /* ignore */
-      }
-      try {
-        await SpeechRecognition.removeAllListeners()
       } catch {
         /* ignore */
       }

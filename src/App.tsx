@@ -69,7 +69,12 @@ export default function App() {
 
   function handleFinish(
     session: Session,
-    payload: { totalMs: number; blockLogs: SessionLog['blockLogs']; blockDurationsMs: number[] },
+    payload: {
+      totalMs: number
+      blockLogs: SessionLog['blockLogs']
+      blockDurationsMs: number[]
+      amrapRounds?: number
+    },
   ) {
     const prevBest = getGhost(session.id)
     const complete = payload.blockLogs.every((b) => !b.dropped)
@@ -81,6 +86,7 @@ export default function App() {
       finishedAt: new Date().toISOString(),
       totalMs: payload.totalMs,
       blockLogs: payload.blockLogs,
+      amrapRounds: payload.amrapRounds,
     }
     saveLog(log)
     saveGhostsFromRun(

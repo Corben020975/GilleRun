@@ -2,6 +2,7 @@ import { KeepAwake } from '@capacitor-community/keep-awake'
 import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import { useEffect, useRef, useState } from 'react'
 import type { Block, BlockLog, DropKind, GhostSplit, Session } from '../types/session'
+import { effectiveBlock } from '../lib/adjust'
 import { beepBlockStart, beepCountdown, resumeAudio } from '../lib/beeps'
 import { formatDelta, formatMs } from '../lib/format'
 import {
@@ -44,8 +45,8 @@ function blockSpecs(b: Block): string {
     .join(' · ')
 }
 
-function nextPreview(session: Session, index: number): string {
-  const n = session.blocks[index + 1]
+function nextPreview(session: Session, index: number, logs: BlockLog[]): string {
+  const n = effectiveBlock(session.blocks, index + 1, logs)
   if (!n) return 'fin'
   return [n.name, blockSpecs(n)].filter(Boolean).join(' · ')
 }
@@ -67,6 +68,7 @@ export function Player({
     totalMs: number
     blockLogs: BlockLog[]
     blockDurationsMs: number[]
+    amrapRounds?: number
   }) => void
 }) {
   const [stage, setStage] = useState<Stage>('ready')
@@ -106,7 +108,8 @@ export function Player({
     dursRef.current = blockDurationsMs
   }, [blockDurationsMs])
 
-  const block = session.blocks[clock.index]
+  // Bloc courant avec les allègements « Trop dur » déjà appliqués
+  const block = effectiveBlock(session.blocks, clock.index, blockLogs)
   const totalSteps = session.blocks.length
 
   // Keep-awake pendant le player actif
@@ -167,20 +170,32 @@ export function Player({
     const left = restRemainingMs(clock, now)
     if (left <= 10000 && left > 9000 && !restAnnounced && voiceOn) {
       setRestAnnounced(true)
-      void speak(`Ensuite : ${nextPreview(session, clock.index)}`)
+      void speak(`Ensuite : ${nextPreview(session, clock.index, blockLogs)}`)
     }
-    if (left > 10000) setRestAnnounced(false)
-  }, [now, clock, voiceOn, restAnnounced, session, stage])
+  }, [now, clock, voiceOn, restAnnounced, session, stage, blockLogs])
 
-  // Persistance
+  // Persistance : à chaque changement d'état (pas à chaque image — avant, 60 écritures/s)
+  // + filet de sécurité toutes les 5 s et quand l'app passe en arrière-plan
   useEffect(() => {
     if (stage !== 'play') return
-    const snap = toPersisted(clock, now, session.id, {
-      blockLogs,
-      blockDurationsMs,
-    })
-    saveActivePlayer(snap)
-  }, [clock, now, blockLogs, blockDurationsMs, session.id, stage])
+    const save = () =>
+      saveActivePlayer(
+        toPersisted(clockRef.current, performance.now(), session.id, {
+          blockLogs: logsRef.current,
+          blockDurationsMs: dursRef.current,
+        }),
+      )
+    save()
+    const id = setInterval(save, 5000)
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') save()
+    }
+    document.addEventListener('visibilitychange', onHide)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onHide)
+    }
+  }, [clock, blockLogs, blockDurationsMs, session.id, stage])
 
   // Voix
   useEffect(() => {
@@ -266,7 +281,7 @@ export function Player({
       beepedRef.current.clear()
       if (beepsOn) void beepBlockStart()
       void Haptics.impact({ style: ImpactStyle.Medium }).catch(() => undefined)
-      const b = session.blocks[clock.index]
+      const b = effectiveBlock(session.blocks, clock.index, logsRef.current)
       if (b && voiceOn) {
         void speak(
           cueForBlock({
@@ -312,23 +327,29 @@ export function Player({
     dursRef.current = nextDurs
     setDropOpen(false)
 
-    const rest = b.restSec ?? 0
-    if (rest > 0 && !dropKind) {
-      setRestAnnounced(false)
+    // Temps de repos à appliquer après ce bloc
+    let rest = b.restSec ?? 0
+    // EMOM : « Fait » avant la fin de la minute = repos jusqu'au top suivant
+    if (b.mode === 'emom' && b.durationSec) rest = Math.max(0, b.durationSec - durationMs / 1000)
+    if (dropKind === 'skip') rest = 0
+
+    if (rest > 0.3) {
       beepedRef.current.clear()
+      const preview = nextPreview(session, c.index, nextLogs)
+      // Repos court : « ensuite » annoncé dès le début, pas de 2e annonce à 10 s
+      const short = rest <= 12
+      setRestAnnounced(short)
       setClock((cl) => startRest(cl, t, rest))
       if (voiceOn) {
         void speak(
           cueForBlock({
             name: 'Repos',
             isRest: true,
-            restSec: rest,
-            nextPreview: nextPreview(session, c.index),
+            restSec: Math.round(rest),
+            nextPreview: short ? preview : undefined,
           }),
         )
       }
-    } else if (rest > 0 && dropKind !== 'skip') {
-      setClock((cl) => startRest(cl, t, rest))
     } else {
       advanceToNext(nextLogs, nextDurs)
     }
@@ -345,6 +366,9 @@ export function Player({
         totalMs: sessionElapsedMs(clockRef.current, t),
         blockLogs: logs,
         blockDurationsMs: durs,
+        amrapRounds: session.blocks.some((x) => x.mode === 'amrap')
+          ? clockRef.current.amrapRounds
+          : undefined,
       })
       return
     }
@@ -352,7 +376,7 @@ export function Player({
     setClock((c) => startWork(c, t, next))
     if (beepsOn) void beepBlockStart()
     void Haptics.impact({ style: ImpactStyle.Medium }).catch(() => undefined)
-    const b = session.blocks[next]
+    const b = effectiveBlock(session.blocks, next, logs)
     if (b && voiceOn) {
       void speak(
         cueForBlock({
@@ -499,7 +523,7 @@ export function Player({
         <div className="block-specs">
           {clock.phase === 'rest' ? (
             <>
-              Ensuite : <strong>{nextPreview(session, clock.index)}</strong>
+              Ensuite : <strong>{nextPreview(session, clock.index, blockLogs)}</strong>
             </>
           ) : (
             blockSpecs(block) || '—'
@@ -540,6 +564,7 @@ export function Player({
           <button
             type="button"
             className="btn btn-primary btn-xl"
+            disabled={paused}
             onClick={() => setClock((c) => ({ ...c, amrapRounds: c.amrapRounds + 1 }))}
           >
             +1 tour
@@ -548,6 +573,7 @@ export function Player({
           <button
             type="button"
             className="btn btn-primary btn-xl"
+            disabled={paused}
             onClick={() => {
               if (clock.phase === 'rest') advanceToNext(blockLogs, blockDurationsMs)
               else completeWork(false)

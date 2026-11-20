@@ -59,46 +59,24 @@ export function normalizeMusicUrl(input?: string | null): string {
 
 /**
  * Ouvre YouTube Music sans Custom Tab qui recouvre Arena.
- * 1) intent Android vers le package YTM
- * 2) schéma vnd.youtube.music
- * 3) fallback navigateur système externe
+ * Sur Android, un lien https://music.youtube.com est un App Link : il ouvre
+ * directement l'app YT Music si elle est installée, sinon le navigateur.
+ * Attention : AppLauncher.openUrl ne lève jamais d'erreur, il renvoie
+ * { completed: false } — il faut donc tester ce retour.
  */
 export async function openYouTubeMusic(url?: string | null): Promise<void> {
   const httpsUrl = normalizeMusicUrl(url)
 
-  if (Capacitor.getPlatform() === 'android') {
-    // Intent explicite package YouTube Music
-    const intentUrl =
-      `intent://${httpsUrl.replace(/^https?:\/\//, '')}` +
-      '#Intent;scheme=https;package=com.google.android.apps.youtube.music;end'
-
+  if (Capacitor.isNativePlatform()) {
     try {
-      const can = await AppLauncher.canOpenUrl({ url: intentUrl })
-      if (can.value) {
-        await AppLauncher.openUrl({ url: intentUrl })
-        return
-      }
+      const res = await AppLauncher.openUrl({ url: httpsUrl })
+      if (res.completed) return
     } catch {
-      /* try next */
-    }
-
-    try {
-      const vnd = `vnd.youtube.music://${httpsUrl.replace(/^https?:\/\//, '')}`
-      await AppLauncher.openUrl({ url: vnd })
-      return
-    } catch {
-      /* try next */
-    }
-
-    try {
-      await AppLauncher.openUrl({ url: httpsUrl })
-      return
-    } catch {
-      /* fall through */
+      /* fallback ci-dessous */
     }
   }
 
-  // Web / iOS / fallback : nouvel onglet système (pas de Custom Tab Capacitor Browser)
+  // Web / échec natif : navigateur système
   const opened = window.open(httpsUrl, '_blank', 'noopener,noreferrer')
-  if (!opened) window.location.href = httpsUrl
+  if (!opened) throw new Error('Impossible d’ouvrir YouTube Music')
 }

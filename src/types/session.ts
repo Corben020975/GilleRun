@@ -87,6 +87,8 @@ export interface SessionLog {
   finishedAt: string
   totalMs: number
   blockLogs: BlockLog[]
+  /** AMRAP : tours complétés */
+  amrapRounds?: number
   rpe?: number
   mood?: 'good' | 'ok' | 'low'
   achillesOk?: boolean
