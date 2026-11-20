@@ -72,3 +72,8 @@ Vignette widget : `public/icon.jpg`.
 ## Note YouTube Music
 
 L’embed utilise l’iframe YouTube (playlist). « Ouvrir » lance YouTube Music natif quand dispo.
+
+## Repo
+
+Actuellement hébergé sur `Corben020975/GilleRun` (repo vide réutilisé).  
+Renomme-le en **arena-51** dans GitHub → Settings → General → Repository name.
