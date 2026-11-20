@@ -1,110 +1,121 @@
-import type { Session } from '../types/session'
+import { flattenStructure } from '../lib/flattenStructure'
+import type { Session, StructureSegment } from '../types/session'
 
-/** Demo sessions matching Wouf's KB / PDC / gilet / cross stack */
+function buildDemo(
+  partial: Omit<Session, 'blocks' | 'createdAt'> & { structure: StructureSegment[] },
+): Session {
+  const flat = flattenStructure(partial.structure)
+  return {
+    ...partial,
+    createdAt: new Date().toISOString(),
+    blocks: flat.blocks,
+    playMode: flat.playMode,
+    emomMinutes: flat.emomMinutes,
+    amrapMinutes: flat.amrapMinutes,
+  }
+}
+
 export const DEMO_SESSIONS: Session[] = [
-  {
+  buildDemo({
     id: 'demo-kb-complex',
-    title: 'Complex KB 2×23 — 5 tours',
-    source: 'Coach 51',
+    title: 'Complex KB 2×23 — 4 tours',
+    source: 'Demo',
     modality: 'KB',
     durationMin: 28,
-    createdAt: new Date().toISOString(),
     notes: 'Volume faisable. Pas de WOD gonflé.',
     music: {
       playlistUrl: 'https://music.youtube.com/search?q=workout%20energy',
       label: 'Workout Energy',
     },
-    blocks: [
-      { id: 'b1', name: 'Swing', reps: 10, side: 'both', loadKg: 23, restSec: 0 },
-      { id: 'b2', name: 'Clean', reps: 5, side: 'L', loadKg: 23, restSec: 0 },
-      { id: 'b3', name: 'Clean', reps: 5, side: 'R', loadKg: 23, restSec: 0 },
-      { id: 'b4', name: 'Push Press', reps: 5, side: 'L', loadKg: 23, restSec: 0 },
-      { id: 'b5', name: 'Push Press', reps: 5, side: 'R', loadKg: 23, restSec: 0 },
-      { id: 'b6', name: 'Front Squat', reps: 8, side: 'both', loadKg: 23, restSec: 90, notes: 'Fin de tour — 90s repos' },
-      { id: 'b7', name: 'Swing', reps: 10, side: 'both', loadKg: 23, restSec: 0 },
-      { id: 'b8', name: 'Clean', reps: 5, side: 'L', loadKg: 23, restSec: 0 },
-      { id: 'b9', name: 'Clean', reps: 5, side: 'R', loadKg: 23, restSec: 0 },
-      { id: 'b10', name: 'Push Press', reps: 5, side: 'L', loadKg: 23, restSec: 0 },
-      { id: 'b11', name: 'Push Press', reps: 5, side: 'R', loadKg: 23, restSec: 0 },
-      { id: 'b12', name: 'Front Squat', reps: 8, side: 'both', loadKg: 23, restSec: 90 },
-      { id: 'b13', name: 'Swing', reps: 10, side: 'both', loadKg: 23, restSec: 0 },
-      { id: 'b14', name: 'Clean', reps: 5, side: 'L', loadKg: 23, restSec: 0 },
-      { id: 'b15', name: 'Clean', reps: 5, side: 'R', loadKg: 23, restSec: 0 },
-      { id: 'b16', name: 'Push Press', reps: 5, side: 'L', loadKg: 23, restSec: 0 },
-      { id: 'b17', name: 'Push Press', reps: 5, side: 'R', loadKg: 23, restSec: 0 },
-      { id: 'b18', name: 'Front Squat', reps: 8, side: 'both', loadKg: 23, restSec: 90 },
+    structure: [
+      {
+        kind: 'rounds',
+        rounds: 4,
+        restBetweenRoundsSec: 90,
+        blocks: [
+          { name: 'Swing', reps: 10, side: 'both', loadKg: 23 },
+          { name: 'Clean', reps: 5, side: 'L', loadKg: 23 },
+          { name: 'Clean', reps: 5, side: 'R', loadKg: 23 },
+          { name: 'Push Press', reps: 5, side: 'L', loadKg: 23 },
+          { name: 'Push Press', reps: 5, side: 'R', loadKg: 23 },
+          { name: 'Front Squat', reps: 8, side: 'both', loadKg: 23 },
+        ],
+      },
     ],
-  },
-  {
+  }),
+  buildDemo({
     id: 'demo-vest-engine',
-    title: 'Vest Engine — 4 rounds',
-    source: 'Coach 51',
+    title: 'Vest Engine — 3 rounds',
+    source: 'Demo',
     modality: 'Gilet',
-    durationMin: 32,
-    createdAt: new Date().toISOString(),
+    durationMin: 30,
     vestDefaultKg: 10,
     music: {
       playlistUrl: 'https://music.youtube.com/search?q=dark%20electronic%20workout',
       label: 'Dark Pulse',
     },
-    blocks: [
-      { id: 'v1', name: 'Push-ups', reps: 15, vestKg: 10, restSec: 0 },
-      { id: 'v2', name: 'Fentes latérales', reps: 6, side: 'L', vestKg: 10, restSec: 0 },
-      { id: 'v3', name: 'Fentes latérales', reps: 6, side: 'R', vestKg: 10, restSec: 0 },
-      { id: 'v4', name: 'Rows', reps: 12, vestKg: 10, restSec: 0 },
-      { id: 'v5', name: 'Fentes arrière', reps: 6, side: 'L', vestKg: 10, restSec: 0 },
-      { id: 'v6', name: 'Fentes arrière', reps: 6, side: 'R', vestKg: 10, restSec: 0 },
-      { id: 'v7', name: 'Sit-ups', reps: 15, vestKg: 10, restSec: 60, notes: 'Fin round — 60s' },
-      { id: 'v8', name: 'Push-ups', reps: 15, vestKg: 10, restSec: 0 },
-      { id: 'v9', name: 'Fentes latérales', reps: 6, side: 'L', vestKg: 10, restSec: 0 },
-      { id: 'v10', name: 'Fentes latérales', reps: 6, side: 'R', vestKg: 10, restSec: 0 },
-      { id: 'v11', name: 'Rows', reps: 12, vestKg: 10, restSec: 0 },
-      { id: 'v12', name: 'Fentes arrière', reps: 6, side: 'L', vestKg: 10, restSec: 0 },
-      { id: 'v13', name: 'Fentes arrière', reps: 6, side: 'R', vestKg: 10, restSec: 0 },
-      { id: 'v14', name: 'Sit-ups', reps: 15, vestKg: 10, restSec: 60 },
+    structure: [
+      {
+        kind: 'rounds',
+        rounds: 3,
+        restBetweenRoundsSec: 60,
+        blocks: [
+          { name: 'Push-ups', reps: 15, vestKg: 10 },
+          { name: 'Fentes latérales', reps: 6, side: 'L', vestKg: 10 },
+          { name: 'Fentes latérales', reps: 6, side: 'R', vestKg: 10 },
+          { name: 'Rows', reps: 12, vestKg: 10 },
+          { name: 'Sit-ups', reps: 15, vestKg: 10 },
+        ],
+      },
     ],
-  },
-  {
-    id: 'demo-pdc-60',
-    title: 'PDC 60 tours — engine',
-    source: 'Coach 51',
+  }),
+  buildDemo({
+    id: 'demo-pdc-engine',
+    title: 'PDC Engine — burpee squat pompe',
+    source: 'Demo',
     modality: 'PDC',
-    durationMin: 40,
-    createdAt: new Date().toISOString(),
-    notes: '1 tour = burpee + squat + pompe. Cap mental, rythme steady.',
+    durationMin: 35,
     music: {
       playlistUrl: 'https://music.youtube.com/charts',
       label: 'Charts',
     },
-    blocks: Array.from({ length: 12 }, (_, i) => ({
-      id: `p${i + 1}`,
-      name: `Bloc 5 tours`,
-      reps: 5,
-      restSec: i % 3 === 2 ? 45 : 15,
-      notes: i % 3 === 2 ? 'Mini break' : undefined,
-    })),
-  },
-  {
+    structure: [
+      {
+        kind: 'rounds',
+        rounds: 8,
+        restBetweenRoundsSec: 20,
+        blocks: [
+          { name: 'Burpee', reps: 5 },
+          { name: 'Air squat', reps: 10 },
+          { name: 'Pompe', reps: 8 },
+        ],
+      },
+    ],
+  }),
+  buildDemo({
     id: 'demo-cross',
-    title: 'Cross soir — KB + PDC + corde',
-    source: 'Coach 51',
+    title: 'Cross soir — KB · PDC · corde',
+    source: 'Demo',
     modality: 'Cross',
     durationMin: 35,
-    createdAt: new Date().toISOString(),
     music: {
       playlistUrl: 'https://music.youtube.com/search?q=hip%20hop%20workout',
       label: 'Garage Night',
     },
-    blocks: [
-      { id: 'c1', name: 'Corde à sauter', durationSec: 90, restSec: 30 },
-      { id: 'c2', name: 'KB Swing @32', reps: 20, loadKg: 32, side: 'both', restSec: 30 },
-      { id: 'c3', name: 'Burpees', reps: 10, restSec: 30 },
-      { id: 'c4', name: 'Corde à sauter', durationSec: 90, restSec: 30 },
-      { id: 'c5', name: 'KB Goblet Squat @23', reps: 15, loadKg: 23, restSec: 30 },
-      { id: 'c6', name: 'Pompes', reps: 12, restSec: 30 },
-      { id: 'c7', name: 'Corde à sauter', durationSec: 60, restSec: 20 },
-      { id: 'c8', name: 'KB Swing @32', reps: 15, loadKg: 32, side: 'both', restSec: 45 },
-      { id: 'c9', name: 'Planche', durationSec: 45, restSec: 0, notes: 'Finisher' },
+    structure: [
+      {
+        kind: 'rounds',
+        rounds: 1,
+        blocks: [
+          { name: 'Corde à sauter', durationSec: 90, restSec: 30 },
+          { name: 'KB Swing @32', reps: 20, loadKg: 32, side: 'both', restSec: 30 },
+          { name: 'Burpees', reps: 10, restSec: 30 },
+          { name: 'Corde à sauter', durationSec: 90, restSec: 30 },
+          { name: 'KB Goblet Squat @23', reps: 15, loadKg: 23, restSec: 30 },
+          { name: 'Pompes', reps: 12, restSec: 30 },
+          { name: 'Planche', durationSec: 45, restSec: 0, notes: 'Finisher' },
+        ],
+      },
     ],
-  },
+  }),
 ]

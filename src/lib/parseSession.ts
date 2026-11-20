@@ -1,4 +1,6 @@
-import type { Block, Modality, Session } from '../types/session'
+import { extractJsonObject } from './extractJson'
+import { flattenStructure } from './flattenStructure'
+import type { Block, Modality, Session, StructureSegment } from '../types/session'
 
 function uid(prefix = 's'): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`
@@ -20,24 +22,8 @@ function asSide(v: unknown): Block['side'] {
   return null
 }
 
-export function parseCoachPayload(raw: string): Session {
-  const trimmed = raw.trim()
-  if (!trimmed) throw new Error('Colle d’abord le JSON envoyé par Coach 51.')
-
-  let data: Record<string, unknown>
-  try {
-    data = JSON.parse(trimmed) as Record<string, unknown>
-  } catch {
-    throw new Error('JSON invalide — demande à Coach 51 un export Arena 51.')
-  }
-
-  // Accept wrapped envelope { type, session } or flat session
-  if (data.session && typeof data.session === 'object') {
-    data = data.session as Record<string, unknown>
-  }
-
-  const blocksRaw = (data.blocks as Record<string, unknown>[]) ?? []
-  const blocks: Block[] = blocksRaw.map((b, i) => ({
+function mapBlock(b: Record<string, unknown>, i: number): Block {
+  return {
     id: String(b.id ?? `b${i + 1}`),
     name: String(b.name ?? b.exo ?? b.exercice ?? `Bloc ${i + 1}`),
     reps: typeof b.reps === 'number' ? b.reps : undefined,
@@ -59,23 +45,43 @@ export function parseCoachPayload(raw: string): Session {
             ? b.kg
             : undefined,
     restSec:
-      typeof b.restSec === 'number'
-        ? b.restSec
-        : typeof b.repos === 'number'
-          ? b.repos
-          : 0,
+      typeof b.restSec === 'number' ? b.restSec : typeof b.repos === 'number' ? b.repos : 0,
     notes: typeof b.notes === 'string' ? b.notes : typeof b.cue === 'string' ? b.cue : undefined,
     vestKg: typeof b.vestKg === 'number' ? b.vestKg : typeof b.gilet === 'number' ? b.gilet : undefined,
-  }))
+  }
+}
+
+export function parseCoachPayload(raw: string): Session {
+  const parsed = extractJsonObject(raw) as Record<string, unknown>
+  let data = parsed
+  if (data.session && typeof data.session === 'object') {
+    data = data.session as Record<string, unknown>
+  }
+
+  let blocks: Block[] = []
+  let playMode: Session['playMode'] = 'standard'
+  let emomMinutes: number | undefined
+  let amrapMinutes: number | undefined
+  let structure: StructureSegment[] | undefined
+
+  if (Array.isArray(data.structure) && data.structure.length > 0) {
+    structure = data.structure as StructureSegment[]
+    const flat = flattenStructure(structure)
+    blocks = flat.blocks
+    playMode = flat.playMode
+    emomMinutes = flat.emomMinutes
+    amrapMinutes = flat.amrapMinutes
+  } else {
+    const blocksRaw = (data.blocks as Record<string, unknown>[]) ?? []
+    blocks = blocksRaw.map(mapBlock)
+  }
 
   if (blocks.length === 0) {
-    throw new Error('Aucun bloc trouvé — le champ "blocks" est vide.')
+    throw new Error('Aucun bloc trouvé — "blocks" ou "structure" vide.')
   }
 
   const music =
-    data.music && typeof data.music === 'object'
-      ? (data.music as Session['music'])
-      : undefined
+    data.music && typeof data.music === 'object' ? (data.music as Session['music']) : undefined
 
   return {
     id: String(data.id ?? uid('coach')),
@@ -90,6 +96,7 @@ export function parseCoachPayload(raw: string): Session {
           : Math.max(20, Math.round(blocks.length * 1.5)),
     createdAt: new Date().toISOString(),
     blocks,
+    structure,
     notes: typeof data.notes === 'string' ? data.notes : undefined,
     vestDefaultKg:
       typeof data.vestDefaultKg === 'number'
@@ -98,15 +105,17 @@ export function parseCoachPayload(raw: string): Session {
           ? data.giletKg
           : undefined,
     music,
+    playMode,
+    emomMinutes,
+    amrapMinutes,
   }
 }
 
-/** Presets that feel like real Coach 51 exports — not a random EMOM stub */
 export const COACH_PRESETS: { id: string; label: string; blurb: string; json: string }[] = [
   {
-    id: 'kb-complex',
+    id: 'kb-rounds',
     label: 'KB Complex',
-    blurb: '2×23 · 4 tours · volume faisable',
+    blurb: '2×23 · 4 tours structurés',
     json: `{
   "type": "arena51.session",
   "version": 1,
@@ -116,39 +125,22 @@ export const COACH_PRESETS: { id: string; label: string; blurb: string; json: st
     "title": "Complex double KB 2×23",
     "modality": "KB",
     "durationMin": 28,
-    "notes": "4 tours. Respire entre les côtés. Pas de WOD gonflé.",
-    "music": {
-      "playlistUrl": "https://music.youtube.com/search?q=workout%20energy",
-      "label": "Workout Energy"
-    },
-    "blocks": [
-      { "name": "Swing", "reps": 10, "loadKg": 23, "side": "both", "restSec": 0, "cue": "Hinge, pas squat" },
-      { "name": "Clean", "reps": 5, "loadKg": 23, "side": "L", "restSec": 0 },
-      { "name": "Clean", "reps": 5, "loadKg": 23, "side": "R", "restSec": 0 },
-      { "name": "Push Press", "reps": 5, "loadKg": 23, "side": "L", "restSec": 0 },
-      { "name": "Push Press", "reps": 5, "loadKg": 23, "side": "R", "restSec": 0 },
-      { "name": "Front Squat", "reps": 8, "loadKg": 23, "side": "both", "restSec": 90, "notes": "Fin de tour" },
-
-      { "name": "Swing", "reps": 10, "loadKg": 23, "side": "both", "restSec": 0 },
-      { "name": "Clean", "reps": 5, "loadKg": 23, "side": "L", "restSec": 0 },
-      { "name": "Clean", "reps": 5, "loadKg": 23, "side": "R", "restSec": 0 },
-      { "name": "Push Press", "reps": 5, "loadKg": 23, "side": "L", "restSec": 0 },
-      { "name": "Push Press", "reps": 5, "loadKg": 23, "side": "R", "restSec": 0 },
-      { "name": "Front Squat", "reps": 8, "loadKg": 23, "side": "both", "restSec": 90 },
-
-      { "name": "Swing", "reps": 10, "loadKg": 23, "side": "both", "restSec": 0 },
-      { "name": "Clean", "reps": 5, "loadKg": 23, "side": "L", "restSec": 0 },
-      { "name": "Clean", "reps": 5, "loadKg": 23, "side": "R", "restSec": 0 },
-      { "name": "Push Press", "reps": 5, "loadKg": 23, "side": "L", "restSec": 0 },
-      { "name": "Push Press", "reps": 5, "loadKg": 23, "side": "R", "restSec": 0 },
-      { "name": "Front Squat", "reps": 8, "loadKg": 23, "side": "both", "restSec": 90 },
-
-      { "name": "Swing", "reps": 10, "loadKg": 23, "side": "both", "restSec": 0 },
-      { "name": "Clean", "reps": 5, "loadKg": 23, "side": "L", "restSec": 0 },
-      { "name": "Clean", "reps": 5, "loadKg": 23, "side": "R", "restSec": 0 },
-      { "name": "Push Press", "reps": 5, "loadKg": 23, "side": "L", "restSec": 0 },
-      { "name": "Push Press", "reps": 5, "loadKg": 23, "side": "R", "restSec": 0 },
-      { "name": "Front Squat", "reps": 8, "loadKg": 23, "side": "both", "restSec": 0, "notes": "Dernier tour" }
+    "notes": "Volume faisable. Respire entre les côtés.",
+    "music": { "playlistUrl": "https://music.youtube.com/search?q=workout%20energy", "label": "Workout Energy" },
+    "structure": [
+      {
+        "kind": "rounds",
+        "rounds": 4,
+        "restBetweenRoundsSec": 90,
+        "blocks": [
+          { "name": "Swing", "reps": 10, "loadKg": 23, "side": "both" },
+          { "name": "Clean", "reps": 5, "loadKg": 23, "side": "L" },
+          { "name": "Clean", "reps": 5, "loadKg": 23, "side": "R" },
+          { "name": "Push Press", "reps": 5, "loadKg": 23, "side": "L" },
+          { "name": "Push Press", "reps": 5, "loadKg": 23, "side": "R" },
+          { "name": "Front Squat", "reps": 8, "loadKg": 23, "side": "both" }
+        ]
+      }
     ]
   }
 }`,
@@ -156,7 +148,7 @@ export const COACH_PRESETS: { id: string; label: string; blurb: string; json: st
   {
     id: 'vest-engine',
     label: 'Gilet Engine',
-    blurb: 'Gilet 10 kg · 3 rounds engine',
+    blurb: 'Gilet 10 kg · 3 rounds',
     json: `{
   "type": "arena51.session",
   "version": 1,
@@ -167,103 +159,53 @@ export const COACH_PRESETS: { id: string; label: string; blurb: string; json: st
     "modality": "Gilet",
     "durationMin": 30,
     "giletKg": 10,
-    "notes": "Steady, pas de sprint. Gilet on toute la séance.",
-    "music": {
-      "playlistUrl": "https://music.youtube.com/search?q=dark%20electronic%20workout",
-      "label": "Dark Pulse"
-    },
-    "blocks": [
-      { "name": "Push-ups", "reps": 15, "vestKg": 10, "restSec": 0 },
-      { "name": "Fentes latérales", "reps": 6, "side": "L", "vestKg": 10, "restSec": 0 },
-      { "name": "Fentes latérales", "reps": 6, "side": "R", "vestKg": 10, "restSec": 0 },
-      { "name": "Rows", "reps": 12, "vestKg": 10, "restSec": 0 },
-      { "name": "Fentes arrière", "reps": 6, "side": "L", "vestKg": 10, "restSec": 0 },
-      { "name": "Fentes arrière", "reps": 6, "side": "R", "vestKg": 10, "restSec": 0 },
-      { "name": "Sit-ups", "reps": 15, "vestKg": 10, "restSec": 60, "notes": "Fin round 1" },
-
-      { "name": "Push-ups", "reps": 15, "vestKg": 10, "restSec": 0 },
-      { "name": "Fentes latérales", "reps": 6, "side": "L", "vestKg": 10, "restSec": 0 },
-      { "name": "Fentes latérales", "reps": 6, "side": "R", "vestKg": 10, "restSec": 0 },
-      { "name": "Rows", "reps": 12, "vestKg": 10, "restSec": 0 },
-      { "name": "Fentes arrière", "reps": 6, "side": "L", "vestKg": 10, "restSec": 0 },
-      { "name": "Fentes arrière", "reps": 6, "side": "R", "vestKg": 10, "restSec": 0 },
-      { "name": "Sit-ups", "reps": 15, "vestKg": 10, "restSec": 60, "notes": "Fin round 2" },
-
-      { "name": "Push-ups", "reps": 12, "vestKg": 10, "restSec": 0 },
-      { "name": "Fentes latérales", "reps": 5, "side": "L", "vestKg": 10, "restSec": 0 },
-      { "name": "Fentes latérales", "reps": 5, "side": "R", "vestKg": 10, "restSec": 0 },
-      { "name": "Rows", "reps": 10, "vestKg": 10, "restSec": 0 },
-      { "name": "Sit-ups", "reps": 12, "vestKg": 10, "restSec": 0, "notes": "Round 3 allégé" }
+    "music": { "playlistUrl": "https://music.youtube.com/search?q=dark%20electronic%20workout", "label": "Dark Pulse" },
+    "structure": [
+      {
+        "kind": "rounds",
+        "rounds": 3,
+        "restBetweenRoundsSec": 60,
+        "blocks": [
+          { "name": "Push-ups", "reps": 15, "vestKg": 10 },
+          { "name": "Fentes latérales", "reps": 6, "side": "L", "vestKg": 10 },
+          { "name": "Fentes latérales", "reps": 6, "side": "R", "vestKg": 10 },
+          { "name": "Rows", "reps": 12, "vestKg": 10 },
+          { "name": "Sit-ups", "reps": 15, "vestKg": 10 }
+        ]
+      }
     ]
   }
 }`,
   },
   {
-    id: 'cross-soir',
-    label: 'Cross soir',
-    blurb: 'KB 32 + PDC + corde · 35 min',
+    id: 'pdc-rounds',
+    label: 'PDC Engine',
+    blurb: 'Burpee · squat · pompe · 8 tours',
     json: `{
   "type": "arena51.session",
   "version": 1,
   "from": "Coach 51",
   "session": {
-    "id": "c51_cross_soir",
-    "title": "Cross soir — KB · PDC · corde",
-    "modality": "Cross",
+    "id": "c51_pdc_engine",
+    "title": "PDC Engine 8 tours",
+    "modality": "PDC",
     "durationMin": 35,
-    "notes": "Créneau 17h30–19h. Intensité modérée → intense.",
-    "music": {
-      "playlistUrl": "https://music.youtube.com/search?q=hip%20hop%20workout",
-      "label": "Garage Night"
-    },
-    "blocks": [
-      { "name": "Corde à sauter", "durationSec": 90, "restSec": 30 },
-      { "name": "KB Swing", "reps": 20, "loadKg": 32, "side": "both", "restSec": 30 },
-      { "name": "Burpees", "reps": 10, "restSec": 30 },
-      { "name": "Corde à sauter", "durationSec": 90, "restSec": 30 },
-      { "name": "KB Goblet Squat", "reps": 15, "loadKg": 23, "restSec": 30 },
-      { "name": "Pompes", "reps": 12, "restSec": 30 },
-      { "name": "Corde à sauter", "durationSec": 60, "restSec": 20 },
-      { "name": "KB Swing", "reps": 15, "loadKg": 32, "side": "both", "restSec": 45 },
-      { "name": "Planche", "durationSec": 45, "restSec": 0, "notes": "Finisher — propre" }
+    "music": { "playlistUrl": "https://music.youtube.com/charts", "label": "Charts" },
+    "structure": [
+      {
+        "kind": "rounds",
+        "rounds": 8,
+        "restBetweenRoundsSec": 20,
+        "blocks": [
+          { "name": "Burpee", "reps": 5 },
+          { "name": "Air squat", "reps": 10 },
+          { "name": "Pompe", "reps": 8 }
+        ]
+      }
     ]
   }
 }`,
   },
 ]
 
-/** Prompt snippet to paste into Coach 51 so exports stop being "bof" */
-export const COACH_51_EXPORT_RULE = `Quand je dis "envoie à Arena" ou "export Arena 51", réponds UNIQUEMENT avec un JSON valide (pas de markdown, pas de commentaire) au format :
-
-{
-  "type": "arena51.session",
-  "version": 1,
-  "from": "Coach 51",
-  "session": {
-    "id": "c51_YYYYMMDD_slug",
-    "title": "titre court",
-    "modality": "KB|PDC|Gilet|Cross|DB|Hyrox",
-    "durationMin": 30,
-    "notes": "consigne courte",
-    "giletKg": 10,
-    "music": {
-      "playlistId": "PLxxxx",
-      "playlistUrl": "https://music.youtube.com/playlist?list=PLxxxx",
-      "label": "nom"
-    },
-    "blocks": [
-      {
-        "name": "exercice",
-        "reps": 10,
-        "durationSec": null,
-        "side": "L|R|both",
-        "loadKg": 23,
-        "vestKg": null,
-        "restSec": 30,
-        "cue": "rappel technique court"
-      }
-    ]
-  }
-}
-
-Règles : matériel maison KB 2×23 + 1×32 + gilet ; volume faisable ; sides L/R séparés en blocs ; un restSec en fin de tour ; jamais de WOD gonflé.`
+export const COACH_51_EXPORT_RULE = `Quand je dis "envoie à Arena" ou "export Arena 51", réponds UNIQUEMENT avec un JSON valide au format arena51.session avec "structure" (rounds|emom|amrap|tabata) ou "blocks" plat. Matériel KB 2×23 + 32 + gilet ; volume faisable ; sides L/R séparés.`
