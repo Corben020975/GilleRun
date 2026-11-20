@@ -24,19 +24,21 @@ export function ImportPanel({
 
   function handleImport() {
     try {
-      const session = parseCoachPayload(raw)
-      onImported(session)
+      onImported(parseCoachPayload(raw))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'JSON invalide')
     }
   }
 
-  function loadPreset(id: string) {
-    const preset = COACH_PRESETS.find((p) => p.id === id)
-    if (!preset) return
-    setActivePreset(id)
-    setRaw(preset.json)
-    setError(null)
+  async function pasteClipboard() {
+    try {
+      const text = await navigator.clipboard.readText()
+      setRaw(text)
+      setActivePreset(null)
+      setError(null)
+    } catch {
+      setError('Presse-papiers inaccessible — colle manuellement.')
+    }
   }
 
   return (
@@ -50,10 +52,10 @@ export function ImportPanel({
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', margin: 0, letterSpacing: '0.05em' }}>
           HANDOFF
         </h1>
-        <p className="hint">Colle l’export Coach 51, ou charge un preset propre.</p>
+        <p className="hint">Colle l’export Coach 51 (JSON, même avec ```json). Tolère le texte autour.</p>
       </div>
 
-      <p className="section-label">Presets Coach 51</p>
+      <p className="section-label">Presets</p>
       <div className="session-list" style={{ marginBottom: 16 }}>
         {COACH_PRESETS.map((p) => (
           <button
@@ -61,7 +63,11 @@ export function ImportPanel({
             type="button"
             className="session-card"
             style={activePreset === p.id ? { borderColor: 'rgba(232,146,58,0.45)' } : undefined}
-            onClick={() => loadPreset(p.id)}
+            onClick={() => {
+              setActivePreset(p.id)
+              setRaw(p.json)
+              setError(null)
+            }}
           >
             <div className="session-card-top">
               <h3>{p.label}</h3>
@@ -77,7 +83,7 @@ export function ImportPanel({
       <div className="panel">
         <textarea
           value={raw}
-          placeholder={`Colle ici le JSON Arena 51 de Coach 51…\n\n{ "type": "arena51.session", "session": { ... } }`}
+          placeholder={'Colle ici le JSON Arena 51…\n\n```json\n{ "type": "arena51.session", ... }\n```'}
           onChange={(e) => {
             setRaw(e.target.value)
             setActivePreset(null)
@@ -93,7 +99,10 @@ export function ImportPanel({
             {preview.durationMin} min
           </p>
         )}
-        <div className="actions-row" style={{ marginBottom: 0 }}>
+        <div className="actions-row" style={{ marginBottom: 0, flexWrap: 'wrap' }}>
+          <button type="button" className="btn" onClick={() => void pasteClipboard()}>
+            Coller presse-papiers
+          </button>
           <button
             type="button"
             className="btn"

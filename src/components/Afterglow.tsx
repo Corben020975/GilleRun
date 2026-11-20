@@ -1,3 +1,4 @@
+import { Share } from '@capacitor/share'
 import { useState } from 'react'
 import type { Session, SessionLog } from '../types/session'
 import { formatMs } from '../lib/format'
@@ -15,13 +16,29 @@ export function Afterglow({
   onHome: () => void
 }) {
   const [rpe, setRpe] = useState(log.rpe ?? 7)
-  const [copied, setCopied] = useState(false)
+  const [status, setStatus] = useState('')
+
+  function payload() {
+    return exportLogForCoach({ ...log, rpe })
+  }
 
   async function copyForCoach() {
-    const payload = exportLogForCoach({ ...log, rpe })
-    await navigator.clipboard.writeText(payload)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    await navigator.clipboard.writeText(payload())
+    setStatus('Copié pour Coach 51')
+  }
+
+  async function shareForCoach() {
+    const text = payload()
+    try {
+      await Share.share({
+        title: `Arena 51 — ${session.title}`,
+        text,
+        dialogTitle: 'Envoyer le log à Coach 51',
+      })
+      setStatus('Partagé')
+    } catch {
+      await copyForCoach()
+    }
   }
 
   return (
@@ -47,7 +64,7 @@ export function Afterglow({
                   ? `−${formatMs(Math.abs(ghostDeltaMs))}`
                   : `+${formatMs(ghostDeltaMs)}`}
             </div>
-            <div className="lbl">vs Ghost</div>
+            <div className="lbl">vs Best</div>
           </div>
         </div>
       </div>
@@ -55,24 +72,23 @@ export function Afterglow({
       <p className="section-label">RPE</p>
       <div className="rpe-row">
         {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-          <button
-            key={n}
-            type="button"
-            className={rpe === n ? 'active' : ''}
-            onClick={() => setRpe(n)}
-          >
+          <button key={n} type="button" className={rpe === n ? 'active' : ''} onClick={() => setRpe(n)}>
             {n}
           </button>
         ))}
       </div>
 
       <div className="actions-row" style={{ flexDirection: 'column' }}>
-        <button type="button" className="btn btn-primary btn-block" onClick={copyForCoach}>
-          {copied ? 'Copié pour Coach 51' : 'Exporter log → Coach 51'}
+        <button type="button" className="btn btn-primary btn-block" onClick={() => void shareForCoach()}>
+          Partager → Coach 51
+        </button>
+        <button type="button" className="btn btn-block" onClick={() => void copyForCoach()}>
+          Copier le JSON
         </button>
         <button type="button" className="btn btn-block" onClick={onHome}>
           Retour inbox
         </button>
+        {status && <p className="hint">{status}</p>}
       </div>
     </div>
   )
