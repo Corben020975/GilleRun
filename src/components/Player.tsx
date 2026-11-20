@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { BlockLog, GhostSplit, Session } from '../types/session'
 import { formatDelta, formatMs } from '../lib/format'
-import { cueForBlock, speak, startVoiceListen } from '../lib/speech'
+import {
+  cueForBlock,
+  speak,
+  startVoiceListen,
+  stopSpeaking,
+  type VoiceCommand,
+  type VoiceListenHandle,
+} from '../lib/speech'
 import { MusicDock } from './MusicDock'
 
 type Phase = 'work' | 'rest'
@@ -28,12 +35,20 @@ export function Player({
   const [blockElapsedMs, setBlockElapsedMs] = useState(0)
   const [restLeftMs, setRestLeftMs] = useState(0)
   const [voiceOn, setVoiceOn] = useState(false)
+  const [voiceStatus, setVoiceStatus] = useState('')
+  const [musicAuto, setMusicAuto] = useState(false)
   const [blockLogs, setBlockLogs] = useState<BlockLog[]>([])
   const [blockDurationsMs, setBlockDurationsMs] = useState<number[]>([])
 
   const blockStartRef = useRef(performance.now())
   const sessionStartRef = useRef(performance.now())
   const lastTickRef = useRef(performance.now())
+  const phaseRef = useRef<Phase>('work')
+  const indexRef = useRef(0)
+  const logsRef = useRef<BlockLog[]>([])
+  const durationsRef = useRef<number[]>([])
+  const voiceHandleRef = useRef<VoiceListenHandle | null>(null)
+  const lastCmdAtRef = useRef(0)
 
   const block = session.blocks[index]
   const done = index >= session.blocks.length
@@ -48,12 +63,25 @@ export function Player({
   }, [index, session.blocks.length])
 
   useEffect(() => {
+    phaseRef.current = phase
+  }, [phase])
+  useEffect(() => {
+    indexRef.current = index
+  }, [index])
+  useEffect(() => {
+    logsRef.current = blockLogs
+  }, [blockLogs])
+  useEffect(() => {
+    durationsRef.current = blockDurationsMs
+  }, [blockDurationsMs])
+
+  useEffect(() => {
     if (!block || done) return
     blockStartRef.current = performance.now()
     setBlockElapsedMs(0)
     setPhase('work')
     if (voiceOn) {
-      speak(
+      void speak(
         cueForBlock({
           name: block.name,
           side: block.side,
@@ -88,7 +116,7 @@ export function Player({
         setRestLeftMs((prev) => {
           const next = prev - dt
           if (next <= 0) {
-            advanceAfterRest()
+            goNext(logsRef.current, durationsRef.current)
             return 0
           }
           return next
@@ -102,46 +130,83 @@ export function Player({
   }, [running, phase, done, index]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!voiceOn) return
-    const stop = startVoiceListen((cmd) => {
-      if (cmd === 'next' || cmd === 'done') completeWork(false)
-      if (cmd === 'drop') completeWork(true)
-    })
-    return stop
-  }, [voiceOn, index, phase]) // eslint-disable-line react-hooks/exhaustive-deps
+    let cancelled = false
+
+    async function run() {
+      await voiceHandleRef.current?.stop()
+      voiceHandleRef.current = null
+
+      if (!voiceOn) {
+        setVoiceStatus('')
+        return
+      }
+
+      const handle = await startVoiceListen((cmd) => {
+        const now = Date.now()
+        if (now - lastCmdAtRef.current < 1200) return
+        lastCmdAtRef.current = now
+        handleVoiceCommand(cmd)
+      }, setVoiceStatus)
+
+      if (cancelled) {
+        await handle.stop()
+        return
+      }
+      voiceHandleRef.current = handle
+    }
+
+    void run()
+
+    return () => {
+      cancelled = true
+      void voiceHandleRef.current?.stop()
+      voiceHandleRef.current = null
+      void stopSpeaking()
+    }
+  }, [voiceOn]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleVoiceCommand(cmd: VoiceCommand) {
+    if (phaseRef.current === 'rest') {
+      if (cmd === 'next' || cmd === 'done') goNext(logsRef.current, durationsRef.current)
+      return
+    }
+    if (cmd === 'drop') completeWork(true)
+    else completeWork(false)
+  }
 
   function completeWork(dropped: boolean) {
-    if (!block || phase !== 'work') return
+    const current = session.blocks[indexRef.current]
+    if (!current || phaseRef.current !== 'work') return
+
     const durationMs = performance.now() - blockStartRef.current
     const log: BlockLog = {
-      blockId: block.id,
+      blockId: current.id,
       completedAt: Date.now(),
       durationMs,
       dropped,
     }
-    const nextLogs = [...blockLogs, log]
-    const nextDurations = [...blockDurationsMs, durationMs]
+    const nextLogs = [...logsRef.current, log]
+    const nextDurations = [...durationsRef.current, durationMs]
     setBlockLogs(nextLogs)
     setBlockDurationsMs(nextDurations)
+    logsRef.current = nextLogs
+    durationsRef.current = nextDurations
 
-    const rest = block.restSec ?? 0
+    const rest = current.restSec ?? 0
     if (rest > 0) {
       setPhase('rest')
       setRestLeftMs(rest * 1000)
-      if (voiceOn) speak(cueForBlock({ name: 'Repos', isRest: true, restSec: rest }))
+      if (voiceOn) void speak(cueForBlock({ name: 'Repos', isRest: true, restSec: rest }))
     } else {
       goNext(nextLogs, nextDurations)
     }
   }
 
-  function advanceAfterRest() {
-    goNext(blockLogs, blockDurationsMs)
-  }
-
   function goNext(logs: BlockLog[], durations: number[]) {
-    const nextIndex = index + 1
+    const nextIndex = indexRef.current + 1
     if (nextIndex >= session.blocks.length) {
       setRunning(false)
+      void stopSpeaking()
       onFinish({
         totalMs: performance.now() - sessionStartRef.current,
         blockLogs: logs,
@@ -186,9 +251,7 @@ export function Player({
       <div className="timer-hero">
         <div className="phase-label">{phase === 'rest' ? 'Repos' : 'Work'}</div>
         <h2 className="block-name">{phase === 'rest' ? 'Repos' : block.name}</h2>
-        <div className="block-specs">
-          {phase === 'rest' ? `${block.restSec}s` : specs || '—'}
-        </div>
+        <div className="block-specs">{phase === 'rest' ? `${block.restSec}s` : specs || '—'}</div>
         <p className="clock">{clockDisplay}</p>
         <div className="ghost-row">
           <span>
@@ -212,11 +275,7 @@ export function Player({
       </div>
 
       <div className="controls">
-        <button
-          type="button"
-          className="btn"
-          onClick={() => setRunning((r) => !r)}
-        >
+        <button type="button" className="btn" onClick={() => setRunning((r) => !r)}>
           {running ? 'Pause' : 'Play'}
         </button>
         <button
@@ -242,7 +301,9 @@ export function Player({
       <div className="voice-toggle">
         <div>
           <div>Voice next</div>
-          <div className="hint">Dis « suivant », « fait » ou « trop dur »</div>
+          <div className="hint">
+            {voiceStatus || 'Dis « suivant », « fait » ou « trop dur »'}
+          </div>
         </div>
         <button
           type="button"
@@ -254,7 +315,22 @@ export function Player({
         </button>
       </div>
 
-      <MusicDock session={session} />
+      <div className="voice-toggle" style={{ marginTop: -6 }}>
+        <div>
+          <div>Music au start</div>
+          <div className="hint">Ouvre YouTube Music en parallèle</div>
+        </div>
+        <button
+          type="button"
+          className={`toggle ${musicAuto ? 'on' : ''}`}
+          aria-pressed={musicAuto}
+          onClick={() => setMusicAuto((v) => !v)}
+        >
+          <span />
+        </button>
+      </div>
+
+      <MusicDock session={session} autoOpen={musicAuto} />
 
       <p className="section-label">Blocs</p>
       <div className="upcoming">

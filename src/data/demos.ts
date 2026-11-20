@@ -11,9 +11,8 @@ export const DEMO_SESSIONS: Session[] = [
     createdAt: new Date().toISOString(),
     notes: 'Volume faisable. Pas de WOD gonflé.',
     music: {
-      playlistId: 'PLw-VjUGpzkHRG8tLdLxZzW_gERpPm8G5W',
-      playlistUrl: 'https://music.youtube.com/playlist?list=PLw-VjUGpzkHRG8tLdLxZzW_gERpPm8G5W',
-      label: 'Engine Mix',
+      playlistUrl: 'https://music.youtube.com/search?q=workout%20energy',
+      label: 'Workout Energy',
     },
     blocks: [
       { id: 'b1', name: 'Swing', reps: 10, side: 'both', loadKg: 23, restSec: 0 },
@@ -45,9 +44,8 @@ export const DEMO_SESSIONS: Session[] = [
     createdAt: new Date().toISOString(),
     vestDefaultKg: 10,
     music: {
-      playlistId: 'PLFgquLnL59alCl_2TQvOiD5Vgm1hFoAJ6',
-      playlistUrl: 'https://music.youtube.com/playlist?list=PLFgquLnL59alCl_2TQvOiD5Vgm1hFoAJ6',
-      label: 'Pulse Dark',
+      playlistUrl: 'https://music.youtube.com/search?q=dark%20electronic%20workout',
+      label: 'Dark Pulse',
     },
     blocks: [
       { id: 'v1', name: 'Push-ups', reps: 15, vestKg: 10, restSec: 0 },
@@ -75,9 +73,8 @@ export const DEMO_SESSIONS: Session[] = [
     createdAt: new Date().toISOString(),
     notes: '1 tour = burpee + squat + pompe. Cap mental, rythme steady.',
     music: {
-      playlistId: 'PLMC9KNkIncKtPzgY-5rmhvj7fax8fdxoj',
-      playlistUrl: 'https://music.youtube.com/playlist?list=PLMC9KNkIncKtPzgY-5rmhvj7fax8fdxoj',
-      label: 'Steady Fire',
+      playlistUrl: 'https://music.youtube.com/charts',
+      label: 'Charts',
     },
     blocks: Array.from({ length: 12 }, (_, i) => ({
       id: `p${i + 1}`,
@@ -95,8 +92,7 @@ export const DEMO_SESSIONS: Session[] = [
     durationMin: 35,
     createdAt: new Date().toISOString(),
     music: {
-      playlistId: 'PLrAl6rYgs4Y-M5oWVDA1odAJJ-tu7q7Fh',
-      playlistUrl: 'https://music.youtube.com/playlist?list=PLrAl6rYgs4Y-M5oWVDA1odAJJ-tu7q7Fh',
+      playlistUrl: 'https://music.youtube.com/search?q=hip%20hop%20workout',
       label: 'Garage Night',
     },
     blocks: [

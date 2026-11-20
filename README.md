@@ -78,6 +78,13 @@ L’embed utilise l’iframe YouTube (playlist). « Ouvrir » lance YouTube Musi
 Actuellement hébergé sur `Corben020975/GilleRun` (repo vide réutilisé).  
 Renomme-le en **arena-51** dans GitHub → Settings → General → Repository name.
 
+
+
+## Voice & YouTube Music (corrigés)
+
+- **Voice next** : micro natif Android (`@capacitor-community/speech-recognition` + TTS). Autorise le micro à la 1ʳᵉ activation. Commandes : « suivant », « fait », « trop dur ».
+- **YouTube Music** : pas d’iframe (bloqué par Google). Bouton **Lancer YouTube Music** ouvre l’app / le site via Capacitor Browser. Colle ta propre playlist si tu veux.
+
 ## APK Android
 
 Fichier prêt à installer (sideload / sources inconnues) :
