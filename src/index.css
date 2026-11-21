@@ -597,3 +597,154 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+/* ——— Écrans réglages / historique / nouvelle séance ——— */
+.screen-title {
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  letter-spacing: 0.04em;
+  margin: 0 0 14px;
+}
+.top-nav {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+.top-nav .btn {
+  padding: 10px 12px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 0.9rem;
+  color: var(--text-dim);
+}
+.field input,
+.field textarea,
+.panel textarea {
+  width: 100%;
+  background: #0a0c10;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  padding: 12px;
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+}
+.panel textarea {
+  min-height: 90px;
+}
+.field input:focus,
+.field textarea:focus {
+  outline: none;
+  border-color: var(--ember);
+}
+.steps {
+  padding-left: 18px;
+  margin: 4px 0 0;
+}
+.steps li {
+  margin-bottom: 4px;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+.chip {
+  background: var(--bg-elevated);
+  border: 1px solid var(--line-strong);
+  color: var(--text-dim);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.chip:active {
+  border-color: var(--ember);
+  color: var(--text);
+}
+details.panel summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+details.panel[open] summary {
+  margin-bottom: 12px;
+}
+.history-card {
+  cursor: default;
+}
+
+/* ——— Aperçu avant de démarrer ——— */
+.session-note {
+  color: var(--text-dim);
+  margin: 0 0 14px;
+}
+.preview {
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.preview-section + .preview-section {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.preview-title {
+  color: var(--ember);
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 8px;
+}
+.preview ol {
+  margin: 0;
+  padding-left: 20px;
+}
+.preview li {
+  margin: 4px 0;
+  line-height: 1.35;
+}
+
+/* ——— Écran d'effort : reps et charge en grand ——— */
+.big-reps {
+  font-family: var(--font-display);
+  font-size: 7rem;
+  line-height: 0.9;
+  margin: 6px 0 0;
+  color: var(--text);
+}
+.big-reps span {
+  font-size: 1.6rem;
+  margin-left: 8px;
+  color: var(--text-dim);
+}
+.big-load {
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: var(--ember);
+  margin: 4px 0 6px;
+}
+.clock-small {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  color: var(--text-dim);
+  margin: 0;
+}
+.next-line {
+  margin: 12px 0 0;
+  color: var(--text-dim);
+  font-size: 0.95rem;
+}
+.panel + .section-label,
+.error-text + .section-label {
+  margin-top: 20px;
+}

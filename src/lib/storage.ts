@@ -87,6 +87,14 @@ export function saveLog(log: SessionLog) {
   write(KEYS.logs, [log, ...logs].slice(0, 50))
 }
 
+/** Met à jour une séance de l'historique (ressenti, note, envoi Notion) */
+export function updateLog(log: SessionLog) {
+  const logs = getLogs().map((l) =>
+    l.finishedAt === log.finishedAt && l.sessionId === log.sessionId ? log : l,
+  )
+  write(KEYS.logs, logs)
+}
+
 export function getGhost(sessionId: string): GhostSplit | null {
   migrateGhosts()
   const best = read<Record<string, GhostSplit>>(KEYS.ghostsBest, {})

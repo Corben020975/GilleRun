@@ -3,6 +3,7 @@ import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import { useEffect, useRef, useState } from 'react'
 import type { Block, BlockLog, DropKind, GhostSplit, Session } from '../types/session'
 import { effectiveBlock } from '../lib/adjust'
+import { previewSections, shortSummary } from '../lib/describe'
 import { beepBlockStart, beepCountdown, resumeAudio } from '../lib/beeps'
 import { formatDelta, formatMs } from '../lib/format'
 import {
@@ -407,7 +408,7 @@ export function Player({
       <div className="player">
         <div className="player-header">
           <button type="button" className="btn btn-ghost" onClick={onAbort}>
-            ← Inbox
+            ← Séances
           </button>
           <span className="modality-pill">{session.modality}</span>
         </div>
@@ -415,16 +416,35 @@ export function Player({
           {session.title}
         </h2>
         <p className="hint">
-          {session.blocks.length} blocs
-          {resumeState ? ' · reprise disponible (en pause)' : ''}
-          {ghost ? ` · Ghost ${formatMs(ghost.totalMs)}` : ''}
-          {lastGhost ? ` · Dernière ${formatMs(lastGhost.totalMs)}` : ''}
+          ~{session.durationMin} min · {shortSummary(session)}
+          {resumeState ? ' · reprise en cours' : ''}
+          {ghost ? ` · record ${formatMs(ghost.totalMs)}` : ''}
+          {lastGhost && lastGhost.finishedAt !== ghost?.finishedAt ? ` · dernière ${formatMs(lastGhost.totalMs)}` : ''}
         </p>
+        {session.notes && <p className="session-note">{session.notes}</p>}
+
+        {/* Aperçu complet : on sait ce qui attend avant de lancer */}
+        <div className="preview">
+          {previewSections(session).map((sec, i) => (
+            <div key={i} className="preview-section">
+              <p className="preview-title">{sec.title}</p>
+              <ol>
+                {sec.lines.map((l, j) => (
+                  <li key={j}>{l}</li>
+                ))}
+              </ol>
+            </div>
+          ))}
+        </div>
+
+        <button type="button" className="btn btn-primary btn-block btn-xl" onClick={() => void startCountdown()}>
+          {resumeState ? 'Reprendre la séance' : 'Démarrer'}
+        </button>
 
         <div className="voice-toggle">
           <div>
-            <div>Voice next</div>
-            <div className="hint">« suivant » · « fait » · « trop dur » · « pause »</div>
+            <div>Commandes vocales</div>
+            <div className="hint">Dis « suivant », « fait », « trop dur » ou « pause »</div>
           </div>
           <button
             type="button"
@@ -436,8 +456,8 @@ export function Player({
         </div>
         <div className="voice-toggle">
           <div>
-            <div>Bips</div>
-            <div className="hint">3-2-1 + début de bloc</div>
+            <div>Bips sonores</div>
+            <div className="hint">3-2-1 avant chaque changement</div>
           </div>
           <button
             type="button"
@@ -448,9 +468,6 @@ export function Player({
           </button>
         </div>
 
-        <button type="button" className="btn btn-primary btn-block btn-xl" onClick={() => void startCountdown()}>
-          {resumeState ? 'Reprendre (5 s)' : 'Prêt — go (5 s)'}
-        </button>
       </div>
     )
   }
@@ -499,6 +516,15 @@ export function Player({
   }
 
   const isAmrap = block.mode === 'amrap'
+  // Bloc en répétitions (pas chronométré) → affichage centré sur reps + charge
+  const repsMode = block.reps != null && !block.durationSec && !isAmrap
+  const loadText = [
+    block.side === 'L' ? 'Gauche' : block.side === 'R' ? 'Droite' : null,
+    block.loadKg != null ? `${block.loadKg} kg` : null,
+    block.vestKg != null ? `gilet ${block.vestKg} kg` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <div className="player player-terrain">
@@ -511,29 +537,43 @@ export function Player({
 
       <div className="timer-hero">
         <div className="phase-label">
-          {paused ? 'Pause' : clock.phase === 'rest' ? 'Repos' : 'Work'}
+          {paused ? 'Pause' : clock.phase === 'rest' ? 'Repos' : 'Effort'}
           {block.roundLabel ? ` · ${block.roundLabel}` : ''}
         </div>
         <h2 className="block-name">
           {clock.phase === 'rest' ? 'Repos' : block.name}
         </h2>
-        <div className="block-specs">
-          {clock.phase === 'rest' ? (
-            <>
+        {clock.phase === 'rest' ? (
+          <>
+            <div className="block-specs">
               Ensuite : <strong>{nextPreview(session, clock.index, blockLogs)}</strong>
-            </>
-          ) : (
-            blockSpecs(block) || '—'
-          )}
-        </div>
-        <p className="clock">{clockDisplay}</p>
+            </div>
+            <p className="clock">{clockDisplay}</p>
+          </>
+        ) : repsMode ? (
+          <>
+            {/* Exercice en reps : le nombre et la charge en grand, le chrono en petit */}
+            <p className="big-reps">
+              {block.reps}
+              <span>reps</span>
+            </p>
+            {loadText && <p className="big-load">{loadText}</p>}
+            <p className="clock-small">{clockDisplay}</p>
+          </>
+        ) : (
+          <>
+            <div className="block-specs">{blockSpecs(block) || '—'}</div>
+            <p className="clock">{clockDisplay}</p>
+          </>
+        )}
+        {clock.phase === 'work' && block.notes && <p className="hint">{block.notes}</p>}
         <div className="ghost-row">
           <span>
             Séance <strong>{formatMs(sessMs)}</strong>
           </span>
           {ghostBlockMs != null && clock.phase === 'work' && (
             <span>
-              Ghost <strong>{formatMs(ghostBlockMs)}</strong>{' '}
+              Record <strong>{formatMs(ghostBlockMs)}</strong>{' '}
               {ghostDelta != null && (
                 <span className={ghostDelta <= 0 ? 'delta-ahead' : 'delta-behind'}>
                   ({formatDelta(ghostDelta)})
@@ -544,8 +584,11 @@ export function Player({
         </div>
         {isAmrap && (
           <p className="hint" style={{ marginTop: 8 }}>
-            Tours AMRAP : <strong>{clock.amrapRounds}</strong>
+            Tours faits : <strong>{clock.amrapRounds}</strong>
           </p>
+        )}
+        {clock.phase === 'work' && !isAmrap && (
+          <p className="next-line">Ensuite : {nextPreview(session, clock.index, blockLogs)}</p>
         )}
       </div>
 
@@ -576,7 +619,7 @@ export function Player({
               else completeWork(false)
             }}
           >
-            {clock.phase === 'rest' ? 'Skip repos' : 'Fait / Next'}
+            {clock.phase === 'rest' ? 'Passer le repos' : 'Fait'}
           </button>
         )}
         <button
@@ -593,16 +636,16 @@ export function Player({
 
       {dropOpen && (
         <div className="panel" style={{ marginTop: 12 }}>
-          <p className="section-label">Trop dur — ajuste</p>
+          <p className="section-label">Trop dur — on allège la suite</p>
           <div className="actions-row" style={{ flexDirection: 'column' }}>
             <button type="button" className="btn btn-block" onClick={() => completeWork(true, 'reps')}>
-              − reps
+              Moins de reps (−25 %)
             </button>
             <button type="button" className="btn btn-block" onClick={() => completeWork(true, 'load')}>
-              − charge
+              Plus léger
             </button>
             <button type="button" className="btn btn-block btn-danger" onClick={() => completeWork(true, 'skip')}>
-              Sauter le bloc
+              Passer l’exercice
             </button>
             <button type="button" className="btn btn-ghost btn-block" onClick={() => setDropOpen(false)}>
               Annuler
@@ -613,7 +656,7 @@ export function Player({
 
       {confirmQuit && (
         <div className="panel" style={{ marginTop: 12 }}>
-          <p>Quitter ? La séance reste reprisable depuis l’inbox.</p>
+          <p>Quitter ? Tu pourras reprendre la séance depuis la liste.</p>
           <div className="actions-row">
             <button type="button" className="btn" onClick={() => setConfirmQuit(false)}>
               Continuer

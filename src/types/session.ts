@@ -51,7 +51,7 @@ export type StructureSegment =
 export interface Session {
   id: string
   title: string
-  source: 'Coach 51' | 'Import' | 'Demo'
+  source: 'Coach 51' | 'Import' | 'Demo' | 'Claude'
   modality: Modality
   durationMin: number
   createdAt: string
@@ -85,6 +85,10 @@ export interface SessionLog {
   /** AMRAP : tours complétés */
   amrapRounds?: number
   rpe?: number
+  /** Note libre après la séance */
+  note?: string
+  /** Page Notion créée (= déjà envoyée) */
+  notionPageId?: string
   mood?: 'good' | 'ok' | 'low'
   achillesOk?: boolean
 }

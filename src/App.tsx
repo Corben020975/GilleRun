@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Afterglow } from './components/Afterglow'
+import { History } from './components/History'
+import { SettingsScreen } from './components/SettingsScreen'
 import { ImportPanel } from './components/ImportPanel'
 import { Inbox } from './components/Inbox'
 import { Player } from './components/Player'
@@ -20,6 +22,8 @@ import type { GhostSplit, Session, SessionLog } from './types/session'
 type Screen =
   | { name: 'inbox' }
   | { name: 'import' }
+  | { name: 'history' }
+  | { name: 'settings'; back: 'inbox' | 'import' }
   | { name: 'player'; session: Session; resume?: PersistedPlayerState | null }
   | { name: 'afterglow'; session: Session; log: SessionLog; ghostDeltaMs: number | null }
 
@@ -117,6 +121,8 @@ export default function App() {
           onOpen={openSession}
           onResume={resumeActive}
           onImport={() => setScreen({ name: 'import' })}
+          onHistory={() => setScreen({ name: 'history' })}
+          onSettings={() => setScreen({ name: 'settings', back: 'inbox' })}
           onDelete={(id) => {
             removeSessionFromInbox(id)
             refreshInbox()
@@ -124,8 +130,14 @@ export default function App() {
         />
       )}
       {screen.name === 'import' && (
-        <ImportPanel onBack={() => setScreen({ name: 'inbox' })} onImported={handleImported} />
+        <ImportPanel
+          onBack={() => setScreen({ name: 'inbox' })}
+          onImported={handleImported}
+          onSettings={() => setScreen({ name: 'settings', back: 'import' })}
+        />
       )}
+      {screen.name === 'history' && <History onBack={() => setScreen({ name: 'inbox' })} />}
+      {screen.name === 'settings' && <SettingsScreen onBack={() => setScreen(screen.back === 'import' ? { name: 'import' } : { name: 'inbox' })} />}
       {screen.name === 'player' && (
         <Player
           session={screen.session}

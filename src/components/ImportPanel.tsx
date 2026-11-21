@@ -1,40 +1,56 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
+import { generateSession } from '../lib/claude'
 import { COACH_PRESETS, parseCoachPayload } from '../lib/parseSession'
+import { getSettings } from '../lib/settings'
 import type { Session } from '../types/session'
 
+const IDEAS = [
+  'Kettlebell 30 min, force + cardio',
+  'EMOM 20 min kettlebell',
+  'Gilet lesté 25 min, poids du corps',
+  'Séance courte 15 min, je suis fatigué',
+  'AMRAP 12 min + gainage',
+]
+
+/** Nouvelle séance : générée par Claude, collée depuis Coach 51, ou modèle */
 export function ImportPanel({
   onBack,
   onImported,
+  onSettings,
 }: {
   onBack: () => void
   onImported: (session: Session) => void
+  onSettings: () => void
 }) {
+  const hasKey = Boolean(getSettings().claudeKey.trim())
+  const [request, setRequest] = useState('')
+  const [generating, setGenerating] = useState(false)
   const [raw, setRaw] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [activePreset, setActivePreset] = useState<string | null>(null)
 
-  const preview = useMemo(() => {
-    if (!raw.trim()) return null
+  async function generate() {
+    setGenerating(true)
+    setError(null)
     try {
-      return parseCoachPayload(raw)
-    } catch {
-      return null
+      onImported(await generateSession(request.trim()))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Génération impossible.')
+    } finally {
+      setGenerating(false)
     }
-  }, [raw])
+  }
 
-  function handleImport() {
+  function importJson() {
     try {
       onImported(parseCoachPayload(raw))
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'JSON invalide')
+      setError(e instanceof Error ? e.message : 'Texte non reconnu.')
     }
   }
 
   async function pasteClipboard() {
     try {
-      const text = await navigator.clipboard.readText()
-      setRaw(text)
-      setActivePreset(null)
+      setRaw(await navigator.clipboard.readText())
       setError(null)
     } catch {
       setError('Presse-papiers inaccessible — colle manuellement.')
@@ -45,33 +61,63 @@ export function ImportPanel({
     <div>
       <div className="player-header" style={{ marginBottom: 18 }}>
         <button type="button" className="btn btn-ghost" onClick={onBack}>
-          ← Retour
+          ← Séances
         </button>
       </div>
-      <div className="brand-text" style={{ marginBottom: 16 }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', margin: 0, letterSpacing: '0.05em' }}>
-          IMPORTER UNE SÉANCE
-        </h1>
-        <p className="hint">Colle la séance envoyée par Coach 51 (le bloc JSON), ou choisis un modèle ci-dessous.</p>
-      </div>
+      <h1 className="screen-title">Nouvelle séance</h1>
 
-      <p className="section-label">Modèles</p>
+      <p className="section-label">Générer avec Claude</p>
+      <div className="panel">
+        {hasKey ? (
+          <>
+            <textarea
+              rows={3}
+              value={request}
+              onChange={(e) => setRequest(e.target.value)}
+              placeholder="Ex. : 30 min kettlebell, j’ai mal à l’épaule gauche, pas de saut"
+              aria-label="Séance souhaitée"
+            />
+            <div className="chips">
+              {IDEAS.map((i) => (
+                <button key={i} type="button" className="chip" onClick={() => setRequest(i)}>
+                  {i}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary btn-block btn-xl"
+              disabled={generating || !request.trim()}
+              onClick={() => void generate()}
+            >
+              {generating ? 'Claude prépare ta séance…' : 'Générer la séance'}
+            </button>
+            {generating && <p className="hint">Ça prend 20 à 60 secondes.</p>}
+          </>
+        ) : (
+          <>
+            <p className="hint" style={{ marginTop: 0 }}>
+              Ajoute ta clé API Claude pour générer une séance sur mesure en une phrase.
+            </p>
+            <button type="button" className="btn btn-block" onClick={onSettings}>
+              Ouvrir les réglages
+            </button>
+          </>
+        )}
+      </div>
+      {error && <p className="error-text">{error}</p>}
+
+      <p className="section-label">Modèles prêts</p>
       <div className="session-list" style={{ marginBottom: 16 }}>
         {COACH_PRESETS.map((p) => (
           <button
             key={p.id}
             type="button"
             className="session-card"
-            style={activePreset === p.id ? { borderColor: 'rgba(232,146,58,0.45)' } : undefined}
-            onClick={() => {
-              setActivePreset(p.id)
-              setRaw(p.json)
-              setError(null)
-            }}
+            onClick={() => onImported(parseCoachPayload(p.json))}
           >
             <div className="session-card-top">
               <h3>{p.label}</h3>
-              <span className="modality-pill">Preset</span>
             </div>
             <div className="session-meta">
               <span>{p.blurb}</span>
@@ -80,45 +126,27 @@ export function ImportPanel({
         ))}
       </div>
 
-      <div className="panel">
+      <details className="panel">
+        <summary>Coller une séance de Coach 51</summary>
         <textarea
           value={raw}
-          placeholder={'Colle ici le JSON Arena 51…\n\n```json\n{ "type": "arena51.session", ... }\n```'}
+          placeholder="Colle ici le bloc envoyé par Coach 51…"
           onChange={(e) => {
             setRaw(e.target.value)
-            setActivePreset(null)
             setError(null)
           }}
           spellCheck={false}
-          aria-label="JSON Coach 51"
+          aria-label="Séance Coach 51"
         />
-        {error && <p className="error-text">{error}</p>}
-        {preview && !error && (
-          <p className="hint" style={{ marginTop: 8 }}>
-            Aperçu : <strong>{preview.title}</strong> · {preview.modality} · {preview.blocks.length} blocs · ~
-            {preview.durationMin} min
-          </p>
-        )}
-        <div className="actions-row" style={{ marginBottom: 0, flexWrap: 'wrap' }}>
+        <div className="actions-row" style={{ marginBottom: 0 }}>
           <button type="button" className="btn" onClick={() => void pasteClipboard()}>
-            Coller presse-papiers
+            Coller
           </button>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => {
-              setRaw('')
-              setActivePreset(null)
-              setError(null)
-            }}
-          >
-            Effacer
-          </button>
-          <button type="button" className="btn btn-primary" onClick={handleImport} disabled={!raw.trim()}>
-            Transcrire & lancer
+          <button type="button" className="btn btn-primary" onClick={importJson} disabled={!raw.trim()}>
+            Ajouter
           </button>
         </div>
-      </div>
+      </details>
     </div>
   )
 }

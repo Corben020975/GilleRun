@@ -1,6 +1,7 @@
 import type { GhostSplit, Session } from '../types/session'
 import type { PersistedPlayerState } from '../lib/sessionClock'
 import { formatMs } from '../lib/format'
+import { shortSummary } from '../lib/describe'
 
 export function Inbox({
   sessions,
@@ -11,6 +12,8 @@ export function Inbox({
   onResume,
   onImport,
   onDelete,
+  onHistory,
+  onSettings,
 }: {
   sessions: Session[]
   ghosts: Record<string, GhostSplit | null>
@@ -20,6 +23,8 @@ export function Inbox({
   onResume: () => void
   onImport: () => void
   onDelete: (id: string) => void
+  onHistory: () => void
+  onSettings: () => void
 }) {
   const resumeSession = activePlayer
     ? sessions.find((s) => s.id === activePlayer.sessionId)
@@ -33,9 +38,14 @@ export function Inbox({
         </div>
         <div className="brand-text">
           <h1>ARENA 51</h1>
-          <p>
-            Coach 51 envoie. <span className="tagline-ember">Arena exécute.</span>
-          </p>
+        </div>
+        <div className="top-nav">
+          <button type="button" className="btn btn-ghost" onClick={onHistory}>
+            Historique
+          </button>
+          <button type="button" className="btn btn-ghost" onClick={onSettings} aria-label="Réglages">
+            ⚙
+          </button>
         </div>
       </div>
 
@@ -46,8 +56,8 @@ export function Inbox({
       )}
 
       <div className="actions-row">
-        <button type="button" className="btn btn-primary" onClick={onImport}>
-          + Importer une séance
+        <button type="button" className="btn btn-primary btn-block" onClick={onImport}>
+          + Nouvelle séance
         </button>
       </div>
 
@@ -65,10 +75,10 @@ export function Inbox({
                 </div>
                 <div className="session-meta">
                   <span>{s.durationMin} min</span>
-                  <span>{s.blocks.length} blocs</span>
-                  <span>{s.source}</span>
-                  {ghost && <span className="ghost-badge">Best {formatMs(ghost.totalMs)}</span>}
-                  {last && <span>Dernière {formatMs(last.totalMs)}</span>}
+                  <span>{shortSummary(s)}</span>
+                  {s.source === 'Claude' && <span>Claude</span>}
+                  {ghost && <span className="ghost-badge">Record {formatMs(ghost.totalMs)}</span>}
+                  {last && last.finishedAt !== ghost?.finishedAt && <span>Dernière {formatMs(last.totalMs)}</span>}
                 </div>
               </button>
               <button
@@ -85,7 +95,7 @@ export function Inbox({
             </div>
           )
         })}
-        {sessions.length === 0 && <p className="hint">Aucune séance. Importe-en une.</p>}
+        {sessions.length === 0 && <p className="hint">Aucune séance. Crée-en une avec « + Nouvelle séance ».</p>}
       </div>
     </div>
   )
