@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { formatMs } from '../lib/format'
 import { pushLogToNotion } from '../lib/notion'
 import { notionConfigured } from '../lib/settings'
-import { getLogs, updateLog } from '../lib/storage'
+import { getInbox, getLogs, updateLog } from '../lib/storage'
 import type { SessionLog } from '../types/session'
 
 function fmtDate(iso: string) {
@@ -22,7 +22,8 @@ export function History({ onBack }: { onBack: () => void }) {
     try {
       // Du plus ancien au plus récent pour garder l'ordre dans Notion
       for (const log of [...pending].reverse()) {
-        const id = await pushLogToNotion(log)
+        const session = getInbox().find((s) => s.id === log.sessionId)
+        const id = await pushLogToNotion(log, session)
         updateLog({ ...log, notionPageId: id })
         ok++
       }

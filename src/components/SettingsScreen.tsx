@@ -64,18 +64,19 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
           />
         </label>
         <label className="field">
-          <span>Lien de la page Notion</span>
+          <span>Lien de ta base Notion (ou d’une page)</span>
           <input
             value={s.notionPage}
             onChange={(e) => set('notionPage', e.target.value)}
             placeholder="https://www.notion.so/…"
           />
         </label>
-        {!pageOk && <p className="error-text">Ce lien ne ressemble pas à une page Notion.</p>}
+        {!pageOk && <p className="error-text">Ce lien ne ressemble pas à un lien Notion.</p>}
         <ol className="hint steps">
           <li>notion.so/my-integrations › Nouvelle intégration › copie le jeton.</li>
-          <li>Dans Notion, ouvre la page voulue › ••• › Connexions › ajoute l’intégration.</li>
-          <li>Colle ici le lien de la page. L’app y crée la base « Arena 51 — Historique ».</li>
+          <li>Dans Notion, ouvre ta base de séances › ••• › Connexions › ajoute l’intégration.</li>
+          <li>Colle ici le lien de la base. L’app y ajoute chaque séance terminée et Claude lit les dernières avant de générer.</li>
+          <li>Pas encore de base ? Mets le lien d’une page : l’app y crée une base « Séances ».</li>
         </ol>
       </div>
 

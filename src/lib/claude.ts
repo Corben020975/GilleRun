@@ -1,7 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { parseCoachPayload } from './parseSession'
 import { getLogs } from './storage'
-import { getSettings } from './settings'
+import { recentNotionSessions } from './notion'
+import { getSettings, notionConfigured } from './settings'
 import type { Session } from '../types/session'
 
 /*
@@ -72,7 +73,20 @@ Règles :
 - Titre court (5 mots max), en français. notes de séance : une phrase.
 - Volume réaliste pour la durée demandée. Échauffement intégré si la séance dépasse 20 min.`
 
-function recentHistory(): string {
+/** Historique : la base Notion si elle est branchée, sinon les séances de l'app */
+async function recentHistory(): Promise<string> {
+  if (notionConfigured()) {
+    try {
+      const lines = await recentNotionSessions(10)
+      if (lines.length) return lines.join('\n')
+    } catch {
+      /* Notion injoignable : on se rabat sur l'historique local */
+    }
+  }
+  return localHistory()
+}
+
+function localHistory(): string {
   const logs = getLogs().slice(0, 6)
   if (!logs.length) return 'Aucune séance enregistrée.'
   return logs
@@ -121,7 +135,7 @@ export async function generateSession(request: string): Promise<Session> {
       messages: [
         {
           role: 'user',
-          content: `Profil :\n${profile}\n\nDernières séances :\n${recentHistory()}\n\nDemande : ${request}`,
+          content: `Profil :\n${profile}\n\nDernières séances :\n${await recentHistory()}\n\nDemande : ${request}`,
         },
       ],
     })

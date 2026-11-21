@@ -31,7 +31,7 @@ export function Afterglow({
     updateLog(next)
     if (notionConfigured()) {
       try {
-        next = { ...next, notionPageId: await pushLogToNotion(next) }
+        next = { ...next, notionPageId: await pushLogToNotion(next, session) }
         updateLog(next)
         setStatus('Enregistré et envoyé dans Notion ✓')
       } catch (e) {
