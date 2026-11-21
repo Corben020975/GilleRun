@@ -58,11 +58,6 @@ export interface Session {
   blocks: Block[]
   /** Structure optionnelle (rétrocompatible) — déjà aplatie dans blocks */
   structure?: StructureSegment[]
-  music?: {
-    playlistId?: string
-    playlistUrl?: string
-    label?: string
-  }
   notes?: string
   vestDefaultKg?: number
   /** Mode global si toute la séance est EMOM/AMRAP */

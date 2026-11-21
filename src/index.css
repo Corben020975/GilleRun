@@ -471,64 +471,6 @@ a {
   text-decoration: line-through;
 }
 
-.music-dock {
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  overflow: hidden;
-  background: #0a0c10;
-}
-
-.music-dock-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--line);
-  font-size: 0.8rem;
-  color: var(--text-dim);
-}
-
-.music-dock-body {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.music-input {
-  width: 100%;
-  background: #07080a;
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
-  padding: 12px;
-  color: var(--text);
-}
-
-.music-input:focus {
-  outline: 2px solid rgba(232, 146, 58, 0.35);
-}
-
-.music-presets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.music-chip {
-  border: 1px solid var(--line-strong);
-  background: var(--bg-elevated);
-  color: var(--text-dim);
-  border-radius: 999px;
-  padding: 6px 10px;
-  font-size: 0.75rem;
-  cursor: pointer;
-}
-
-.music-chip:hover {
-  color: var(--text);
-  border-color: rgba(232, 146, 58, 0.4);
-}
-
 .voice-toggle {
   display: flex;
   align-items: center;

@@ -80,8 +80,6 @@ export function parseCoachPayload(raw: string): Session {
     throw new Error('Aucun bloc trouvé — "blocks" ou "structure" vide.')
   }
 
-  const music =
-    data.music && typeof data.music === 'object' ? (data.music as Session['music']) : undefined
 
   return {
     id: String(data.id ?? uid('coach')),
@@ -104,7 +102,6 @@ export function parseCoachPayload(raw: string): Session {
         : typeof data.giletKg === 'number'
           ? data.giletKg
           : undefined,
-    music,
     playMode,
     emomMinutes,
     amrapMinutes,
@@ -126,7 +123,6 @@ export const COACH_PRESETS: { id: string; label: string; blurb: string; json: st
     "modality": "KB",
     "durationMin": 28,
     "notes": "Volume faisable. Respire entre les côtés.",
-    "music": { "playlistUrl": "https://music.youtube.com/search?q=workout%20energy", "label": "Workout Energy" },
     "structure": [
       {
         "kind": "rounds",
@@ -159,7 +155,6 @@ export const COACH_PRESETS: { id: string; label: string; blurb: string; json: st
     "modality": "Gilet",
     "durationMin": 30,
     "giletKg": 10,
-    "music": { "playlistUrl": "https://music.youtube.com/search?q=dark%20electronic%20workout", "label": "Dark Pulse" },
     "structure": [
       {
         "kind": "rounds",
@@ -190,7 +185,6 @@ export const COACH_PRESETS: { id: string; label: string; blurb: string; json: st
     "title": "PDC Engine 8 tours",
     "modality": "PDC",
     "durationMin": 35,
-    "music": { "playlistUrl": "https://music.youtube.com/charts", "label": "Charts" },
     "structure": [
       {
         "kind": "rounds",

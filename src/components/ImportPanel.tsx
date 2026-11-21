@@ -50,12 +50,12 @@ export function ImportPanel({
       </div>
       <div className="brand-text" style={{ marginBottom: 16 }}>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', margin: 0, letterSpacing: '0.05em' }}>
-          HANDOFF
+          IMPORTER UNE SÉANCE
         </h1>
-        <p className="hint">Colle l’export Coach 51 (JSON, même avec ```json). Tolère le texte autour.</p>
+        <p className="hint">Colle la séance envoyée par Coach 51 (le bloc JSON), ou choisis un modèle ci-dessous.</p>
       </div>
 
-      <p className="section-label">Presets</p>
+      <p className="section-label">Modèles</p>
       <div className="session-list" style={{ marginBottom: 16 }}>
         {COACH_PRESETS.map((p) => (
           <button

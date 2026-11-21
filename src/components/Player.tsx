@@ -29,7 +29,6 @@ import {
   type VoiceListenHandle,
 } from '../lib/speech'
 import { clearActivePlayer, saveActivePlayer } from '../lib/storage'
-import { MusicDock } from './MusicDock'
 
 type Stage = 'ready' | 'countdown' | 'play'
 
@@ -449,8 +448,6 @@ export function Player({
           </button>
         </div>
 
-        <MusicDock session={session} />
-
         <button type="button" className="btn btn-primary btn-block btn-xl" onClick={() => void startCountdown()}>
           {resumeState ? 'Reprendre (5 s)' : 'Prêt — go (5 s)'}
         </button>
@@ -464,7 +461,7 @@ export function Player({
       <div className="timer-hero" style={{ marginTop: 48 }}>
         <div className="phase-label">Départ</div>
         <p className="clock">{countdown}</p>
-        <p className="hint">Reste focus. Musique déjà lancée si tu l’as ouverte.</p>
+        <p className="hint">Mets-toi en place.</p>
       </div>
     )
   }

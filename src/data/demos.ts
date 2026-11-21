@@ -23,10 +23,6 @@ export const DEMO_SESSIONS: Session[] = [
     modality: 'KB',
     durationMin: 28,
     notes: 'Volume faisable. Pas de WOD gonflé.',
-    music: {
-      playlistUrl: 'https://music.youtube.com/search?q=workout%20energy',
-      label: 'Workout Energy',
-    },
     structure: [
       {
         kind: 'rounds',
@@ -50,10 +46,6 @@ export const DEMO_SESSIONS: Session[] = [
     modality: 'Gilet',
     durationMin: 30,
     vestDefaultKg: 10,
-    music: {
-      playlistUrl: 'https://music.youtube.com/search?q=dark%20electronic%20workout',
-      label: 'Dark Pulse',
-    },
     structure: [
       {
         kind: 'rounds',
@@ -75,10 +67,6 @@ export const DEMO_SESSIONS: Session[] = [
     source: 'Demo',
     modality: 'PDC',
     durationMin: 35,
-    music: {
-      playlistUrl: 'https://music.youtube.com/charts',
-      label: 'Charts',
-    },
     structure: [
       {
         kind: 'rounds',
@@ -98,10 +86,6 @@ export const DEMO_SESSIONS: Session[] = [
     source: 'Demo',
     modality: 'Cross',
     durationMin: 35,
-    music: {
-      playlistUrl: 'https://music.youtube.com/search?q=hip%20hop%20workout',
-      label: 'Garage Night',
-    },
     structure: [
       {
         kind: 'rounds',

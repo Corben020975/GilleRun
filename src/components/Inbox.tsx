@@ -47,11 +47,11 @@ export function Inbox({
 
       <div className="actions-row">
         <button type="button" className="btn btn-primary" onClick={onImport}>
-          Recevoir Coach 51
+          + Importer une séance
         </button>
       </div>
 
-      <p className="section-label">Inbox séances</p>
+      <p className="section-label">Mes séances</p>
       <div className="session-list">
         {sessions.map((s) => {
           const ghost = ghosts[s.id]
@@ -85,7 +85,7 @@ export function Inbox({
             </div>
           )
         })}
-        {sessions.length === 0 && <p className="hint">Inbox vide. Importe une séance Coach 51.</p>}
+        {sessions.length === 0 && <p className="hint">Aucune séance. Importe-en une.</p>}
       </div>
     </div>
   )
