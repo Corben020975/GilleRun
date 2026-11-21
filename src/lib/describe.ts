@@ -29,11 +29,12 @@ function segmentTitle(seg: StructureSegment): string {
 }
 
 /** Aperçu par parties, pour l'écran avant de démarrer */
-export function previewSections(s: Session): { title: string; lines: string[] }[] {
+export function previewSections(s: Session): { title: string; items: { text: string; name: string }[] }[] {
+  const items = (bs: Omit<Block, 'id'>[]) => bs.map((b) => ({ text: blockLine(b), name: b.name }))
   if (s.structure?.length) {
-    return s.structure.map((seg) => ({ title: segmentTitle(seg), lines: seg.blocks.map(blockLine) }))
+    return s.structure.map((seg) => ({ title: segmentTitle(seg), items: items(seg.blocks) }))
   }
-  return [{ title: 'Déroulé', lines: s.blocks.map(blockLine) }]
+  return [{ title: 'Déroulé', items: items(s.blocks) }]
 }
 
 /** Résumé court pour la liste : « 4 tours × 6 exos » */

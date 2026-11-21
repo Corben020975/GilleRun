@@ -179,7 +179,7 @@ function buildChildren(session: Session | undefined) {
       type: 'paragraph',
       paragraph: { rich_text: [{ type: 'text', text: { content: sec.title }, annotations: { bold: true } }] },
     })
-    for (const line of sec.lines) {
+    for (const { text: line } of sec.items) {
       blocks.push({
         object: 'block',
         type: 'bulleted_list_item',

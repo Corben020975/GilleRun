@@ -78,8 +78,11 @@ export default function App() {
       blockLogs: SessionLog['blockLogs']
       blockDurationsMs: number[]
       amrapRounds?: number
+      session?: Session
     },
   ) {
+    // Séance telle que réellement faite (exos modifiés pendant la séance)
+    if (payload.session) session = payload.session
     const prevBest = getGhost(session.id)
     const complete = payload.blockLogs.every((b) => !b.dropped)
     const log: SessionLog = {

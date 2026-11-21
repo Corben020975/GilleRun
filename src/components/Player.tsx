@@ -29,7 +29,8 @@ import {
   type VoiceCommand,
   type VoiceListenHandle,
 } from '../lib/speech'
-import { clearActivePlayer, saveActivePlayer } from '../lib/storage'
+import { addSessionToInbox, clearActivePlayer, saveActivePlayer } from '../lib/storage'
+import { EditBlockPanel, type BlockPatch } from './EditBlockPanel'
 
 type Stage = 'ready' | 'countdown' | 'play'
 
@@ -52,7 +53,7 @@ function nextPreview(session: Session, index: number, logs: BlockLog[]): string 
 }
 
 export function Player({
-  session,
+  session: initialSession,
   ghost,
   lastGhost,
   resumeState,
@@ -69,8 +70,15 @@ export function Player({
     blockLogs: BlockLog[]
     blockDurationsMs: number[]
     amrapRounds?: number
+    /** Séance telle que réellement faite (après modifications) */
+    session: Session
   }) => void
 }) {
+  // Copie modifiable de la séance (exos, reps, charges changés en cours de route)
+  const [session, setSession] = useState(initialSession)
+  const sessionRef = useRef(initialSession)
+  const [editing, setEditing] = useState<{ index: number; whole: boolean } | null>(null)
+
   const [stage, setStage] = useState<Stage>('ready')
   const [countdown, setCountdown] = useState(5)
   const [clock, setClock] = useState<SessionClock>(() => {
@@ -301,12 +309,41 @@ export function Player({
     return () => clearTimeout(id)
   }, [stage, countdown]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  /**
+   * Applique une modification d'exercice.
+   * - avant la séance (whole) : à toutes les occurrences de l'exercice
+   * - pendant : au bloc visé, et aux tours suivants si demandé
+   * La séance modifiée est enregistrée : elle sera reprise telle quelle la prochaine fois.
+   */
+  function applyEdit(index: number, whole: boolean, patch: BlockPatch, applyNext: boolean) {
+    const cur = sessionRef.current
+    const origName = cur.blocks[index]?.name
+    if (origName == null) return
+    const hits = (b: Block, i: number) =>
+      whole ? b.name === origName : i === index || (applyNext && i > index && b.name === origName)
+    const blocks = cur.blocks.map((b, i) => (hits(b, i) ? { ...b, ...patch } : b))
+    // La structure (aperçu, Notion) suit seulement si le changement vaut pour toute la suite
+    const structure =
+      whole || applyNext
+        ? cur.structure?.map((seg) => ({
+            ...seg,
+            blocks: seg.blocks.map((b) => (b.name === origName ? { ...b, ...patch } : b)),
+          })) as Session['structure']
+        : cur.structure
+    const next = { ...cur, blocks, structure }
+    sessionRef.current = next
+    setSession(next)
+    addSessionToInbox(next)
+    setEditing(null)
+  }
+
   function togglePause() {
     const t = performance.now()
     setClock((c) => (c.pausedAt ? resumeClock(c, t) : pauseClock(c, t)))
   }
 
   function completeWork(dropped: boolean, dropKind?: DropKind) {
+    const session = sessionRef.current
     const c = clockRef.current
     const b = session.blocks[c.index]
     if (!b || c.phase !== 'work' || c.pausedAt) return
@@ -356,6 +393,7 @@ export function Player({
   }
 
   function advanceToNext(logs: BlockLog[], durs: number[]) {
+    const session = sessionRef.current
     const t = performance.now()
     const next = clockRef.current.index + 1
     if (next >= session.blocks.length) {
@@ -369,6 +407,7 @@ export function Player({
         amrapRounds: session.blocks.some((x) => x.mode === 'amrap')
           ? clockRef.current.amrapRounds
           : undefined,
+        session,
       })
       return
     }
@@ -429,13 +468,34 @@ export function Player({
             <div key={i} className="preview-section">
               <p className="preview-title">{sec.title}</p>
               <ol>
-                {sec.lines.map((l, j) => (
-                  <li key={j}>{l}</li>
+                {sec.items.map((it, j) => (
+                  <li key={j}>
+                    <button
+                      type="button"
+                      className="preview-item"
+                      onClick={() =>
+                        setEditing({ index: session.blocks.findIndex((b) => b.name === it.name), whole: true })
+                      }
+                    >
+                      {it.text}
+                      <span className="edit-hint">✎</span>
+                    </button>
+                  </li>
                 ))}
               </ol>
             </div>
           ))}
         </div>
+        <p className="hint">Touche un exercice pour changer reps, charge ou exercice.</p>
+
+        {editing && session.blocks[editing.index] && (
+          <EditBlockPanel
+            block={session.blocks[editing.index]!}
+            showApplyNext={false}
+            onCancel={() => setEditing(null)}
+            onSave={(patch) => applyEdit(editing.index, true, patch, true)}
+          />
+        )}
 
         <button type="button" className="btn btn-primary btn-block btn-xl" onClick={() => void startCountdown()}>
           {resumeState ? 'Reprendre la séance' : 'Démarrer'}
@@ -633,6 +693,28 @@ export function Player({
       </div>
 
       {voiceOn && voiceStatus && <p className="hint">{voiceStatus}</p>}
+
+      {!editing && (
+        <button
+          type="button"
+          className="btn btn-ghost btn-block"
+          style={{ marginTop: 10 }}
+          disabled={clock.phase === 'rest' && clock.index + 1 >= session.blocks.length}
+          onClick={() =>
+            setEditing({ index: clock.phase === 'rest' ? clock.index + 1 : clock.index, whole: false })
+          }
+        >
+          ✎ {clock.phase === 'rest' ? 'Modifier le prochain exercice' : 'Modifier cet exercice'}
+        </button>
+      )}
+      {editing && session.blocks[editing.index] && (
+        <EditBlockPanel
+          block={session.blocks[editing.index]!}
+          showApplyNext
+          onCancel={() => setEditing(null)}
+          onSave={(patch, applyNext) => applyEdit(editing.index, false, patch, applyNext)}
+        />
+      )}
 
       {dropOpen && (
         <div className="panel" style={{ marginTop: 12 }}>

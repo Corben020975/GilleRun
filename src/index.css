@@ -748,3 +748,36 @@ details.panel[open] summary {
 .error-text + .section-label {
   margin-top: 20px;
 }
+
+/* ——— Modifier un exercice ——— */
+.preview-item {
+  all: unset;
+  cursor: pointer;
+  display: inline;
+}
+.edit-hint {
+  margin-left: 6px;
+  color: var(--text-mute);
+  font-size: 0.85em;
+}
+.edit-panel {
+  margin: 12px 0;
+  border-color: rgba(232, 146, 58, 0.45);
+}
+.field-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 12px;
+  color: var(--text-dim);
+}
+.check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--ember);
+}
